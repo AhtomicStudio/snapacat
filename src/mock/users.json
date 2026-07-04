@@ -1,0 +1,54 @@
+{
+  "user_alice": {
+    "uid": "user_alice",
+    "username": "AliceSnaps",
+    "friends": ["user_bob", "user_charlie"],
+    "hoods": {
+      "hood_parking_lot": {
+        "name": "Work Parking Lot",
+        "custom_bg_url": null,
+        "placed_items": ["item_toy_mouse", "item_premium_kibble"]
+      },
+      "hood_studio": {
+        "name": "Studio Sublet",
+        "custom_bg_url": null,
+        "placed_items": ["item_kibble_bowl", "item_toy_mouse"],
+        "item_placements": {
+          "floor_left": "item_kibble_bowl",
+          "rug": "item_toy_mouse"
+        },
+        "active_environment_id": "env_apartment"
+      }
+    }
+  },
+  "user_bob": {
+    "uid": "user_bob",
+    "username": "BobCatLover",
+    "friends": ["user_alice", "user_charlie"],
+    "hoods": {
+      "hood_porch": {
+        "name": "Front Porch Steps",
+        "custom_bg_url": null,
+        "placed_items": ["item_toy_mouse", "item_kibble_bowl"]
+      }
+    }
+  },
+  "user_charlie": {
+    "uid": "user_charlie",
+    "username": "CharlieTheWhisperer",
+    "friends": ["user_alice", "user_bob"],
+    "hoods": {
+      "hood_balcony": {
+        "name": "Apartment Balcony",
+        "custom_bg_url": null,
+        "placed_items": ["item_kibble_bowl", "item_water_dish", "item_cozy_basket"],
+        "active_environment_id": "env_rooftop"
+      },
+      "hood_alley": {
+        "name": "Side Alleyway",
+        "custom_bg_url": null,
+        "placed_items": ["item_cardboard_box", "item_tuna_can"]
+      }
+    }
+  }
+}

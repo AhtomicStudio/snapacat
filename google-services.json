@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "319160242161",
+    "project_id": "snapacat-be585",
+    "storage_bucket": "snapacat-be585.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:319160242161:android:4ee5d06c2df944f5957e50",
+        "android_client_info": {
+          "package_name": "com.ahtomic.snapacat"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBrCYUyNTeaRog7l3VxHu_J_Y9QiHU9gUw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

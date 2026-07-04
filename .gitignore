@@ -1,0 +1,45 @@
+# --- Node ---
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# --- React Native / Metro ---
+*.jsbundle
+.metro-health-check*
+
+# --- Android build artifacts ---
+android/.gradle/
+android/build/
+android/app/build/
+android/app/.cxx/
+android/app/release/
+android/local.properties
+*.hprof
+*.aab
+*.apk
+
+# --- Release signing (never commit release keys; debug.keystore stays tracked) ---
+android/app/*.keystore
+!android/app/debug.keystore
+
+# --- iOS (future) ---
+ios/build/
+ios/Pods/
+ios/.xcode.env.local
+**/*.xcworkspace/xcuserdata/
+
+# --- Testing / coverage ---
+coverage/
+
+# --- IDE / OS noise ---
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# --- Env & secrets ---
+.env
+.env.*
+
+# --- Claude Code session-local settings ---
+.claude/settings.local.json

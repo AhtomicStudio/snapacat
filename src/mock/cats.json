@@ -1,0 +1,62 @@
+[
+  {
+    "cat_id": "cat_ginger_tabby",
+    "owner_uid": "user_alice",
+    "name": "Mochi",
+    "gender": "male",
+    "sprite_template_id": "orange_mackerel_tabby",
+    "scrapbook": [
+      {
+        "sighting_id": "sight_mochi_1",
+        "user_id": "user_alice",
+        "cat_id": "cat_ginger_tabby",
+        "timestamp": { "seconds": 1782273600, "nanoseconds": 0 },
+        "hood_name": "Work Parking Lot",
+        "note_text": "Mochi was sleeping under the red sedan. Super cute!",
+        "extracted_colors": ["#E87830", "#B84010", "#FFD0A0"]
+      }
+    ]
+  },
+  {
+    "cat_id": "cat_tuxedo",
+    "owner_uid": "user_alice",
+    "name": "Socks",
+    "gender": "female",
+    "sprite_template_id": "black_tuxedo",
+    "scrapbook": [
+      {
+        "sighting_id": "sight_socks_1",
+        "user_id": "user_alice",
+        "cat_id": "cat_tuxedo",
+        "timestamp": { "seconds": 1782360000, "nanoseconds": 0 },
+        "hood_name": "Backyard Deck",
+        "note_text": "Socks visited the food bowl. Very polite cat.",
+        "extracted_colors": ["#141414", "#F2F2F2", "#FF9E9A"]
+      }
+    ]
+  },
+  {
+    "cat_id": "cat_calico",
+    "owner_uid": "user_alice",
+    "name": "Patches",
+    "gender": "female",
+    "sprite_template_id": "calico",
+    "scrapbook": []
+  },
+  {
+    "cat_id": "cat_siamese",
+    "owner_uid": "user_alice",
+    "name": "Coco",
+    "gender": "unknown",
+    "sprite_template_id": "seal_point",
+    "scrapbook": []
+  },
+  {
+    "cat_id": "cat_black",
+    "owner_uid": "user_bob",
+    "name": "Midnight",
+    "gender": "male",
+    "sprite_template_id": "solid_black",
+    "scrapbook": []
+  }
+]

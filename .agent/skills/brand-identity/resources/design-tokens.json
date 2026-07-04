@@ -1,0 +1,68 @@
+{
+  "theme": "SnapaCat Playful Warm",
+  "typography": {
+    "fontFamily": "'Outfit', 'Quicksand', 'Nunito', system-ui, sans-serif",
+    "sizes": {
+      "xs": "0.75rem",
+      "sm": "0.875rem",
+      "base": "1rem",
+      "lg": "1.125rem",
+      "xl": "1.25rem",
+      "xxl": "1.5rem",
+      "title": "2rem"
+    },
+    "weights": {
+      "regular": 400,
+      "medium": 500,
+      "semibold": 600,
+      "bold": 700
+    }
+  },
+  "colors": {
+    "brand": {
+      "ginger": "#FF8E53",
+      "gingerDark": "#E67035",
+      "gingerLight": "#FFE8DC",
+      "nosePink": "#FFAAA6",
+      "cream": "#FAF6F0",
+      "milk": "#FFFFFF",
+      "charcoal": "#2C2A29"
+    },
+    "ui": {
+      "background": "#FAF6F0",
+      "cardBg": "#FFFFFF",
+      "textPrimary": "#2C2A29",
+      "textSecondary": "#706B67",
+      "border": "#EAE3DA",
+      "success": "#A8D0E6",
+      "warning": "#F8D49B",
+      "error": "#F79E89"
+    },
+    "gradients": {
+      "primary": "linear-gradient(135deg, #FF8E53 0%, #FFAAA6 100%)",
+      "soft": "linear-gradient(135deg, #FFE8DC 0%, #FAF6F0 100%)",
+      "hoodNight": "linear-gradient(180deg, #1A1C29 0%, #2C304E 100%)",
+      "hoodDay": "linear-gradient(180deg, #87CEEB 0%, #E0F6FF 100%)"
+    }
+  },
+  "radii": {
+    "none": "0px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "24px",
+    "full": "9999px"
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "32px",
+    "xxl": "48px"
+  },
+  "shadows": {
+    "card": "0 8px 24px rgba(44, 42, 41, 0.06)",
+    "button": "0 4px 12px rgba(255, 142, 83, 0.2)",
+    "inner": "inset 0 2px 4px rgba(0, 0, 0, 0.05)"
+  }
+}

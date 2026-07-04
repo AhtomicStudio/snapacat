@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-native",
+    "module": "commonjs",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "lib": ["ES2022"],
+    "skipLibCheck": true,
+    "types": ["react-native", "nativewind/types", "jest"]
+  },
+  "include": ["src", "App.tsx", "index.js", "nativewind-env.d.ts"],
+  "exclude": ["node_modules", "babel.config.js", "metro.config.js", "tailwind.config.js"]
+}
