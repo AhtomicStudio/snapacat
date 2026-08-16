@@ -7,12 +7,14 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getFriendHoods, getCats } from '../services/dbService';
-import { PLACEABLE_ITEMS, calculateSpawnChances, MAX_HOOD_CATS } from '../utils/spawnCalculator';
+import { getFriendHoods } from '../services/dbService';
+import { PLACEABLE_ITEMS, calculateSpawnChances } from '../utils/spawnCalculator';
+import { usePerchSprites } from '../hooks/usePerchSprites';
 import { HoodCanvas, SpawnMeter } from '../components/HoodCanvas';
 import { ApartmentCanvas } from '../components/ApartmentCanvas';
 import { autoAssignPlacements } from '../config/apartment';
 import { getEnvironmentById } from '../config/environments';
+import { getThemeById, DEFAULT_THEME } from '../config/themes';
 import type { Hood } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -126,34 +128,8 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
   const [friendData, setFriendData] = useState<FriendData | null>(null);
   const [selectedHoodId, setSelectedHoodId] = useState<string | null>(null);
   const [isNight, setIsNight] = useState(false);
-  const [catSpriteIds, setCatSpriteIds] = useState<string[]>([]);
-
   // Cats perched in a friend's Hood are the cats from THEIR Cat-a-log.
-  useEffect(() => {
-    let cancelled = false;
-    getCats(friendUid)
-      .then((cats) => {
-        if (!cancelled) {
-          setCatSpriteIds(cats.map((c) => c.sprite_template_id).filter(Boolean));
-        }
-      })
-      .catch((err) => console.error("Failed to load friend's cats:", err));
-    return () => {
-      cancelled = true;
-    };
-  }, [friendUid]);
-
-  /** Cycles so every occupied perch shows a real cat. See HoodScreen. */
-  const perchSprites = useMemo(
-    () =>
-      catSpriteIds.length === 0
-        ? []
-        : Array.from(
-            { length: MAX_HOOD_CATS },
-            (_, i) => catSpriteIds[i % catSpriteIds.length]!,
-          ),
-    [catSpriteIds],
-  );
+  const { perchSprites, loading: spritesLoading } = usePerchSprites(friendUid);
 
   // ---- Fetch friend data ----
   useEffect(() => {
@@ -187,6 +163,21 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
     if (!friendData || !selectedHoodId) return null;
     return friendData.hoods[selectedHoodId] ?? null;
   }, [friendData, selectedHoodId]);
+
+  /**
+   * A friend's Hood should render in the theme they bought. Omitting this made
+   * every visited Hood fall back to the default palette, quietly discarding the
+   * PawPoints they spent on it.
+   */
+  const themeColors = useMemo(() => {
+    const theme = getThemeById(selectedHood?.active_theme_id ?? '') ?? DEFAULT_THEME;
+    return {
+      skyTop: theme.sky_colors[0],
+      skyBottom: theme.sky_colors[1],
+      ground: theme.ground_color,
+      accent: theme.accent_color,
+    };
+  }, [selectedHood]);
 
   const isApartment = useMemo(
     () =>
@@ -352,6 +343,8 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
                 expectedCats={spawnResult.expectedCats}
                 isNight={isNight}
                 spriteIds={perchSprites}
+                spritesLoading={spritesLoading}
+                themeColors={themeColors}
                 readOnly
               />
             ) : (
@@ -360,6 +353,8 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
                 expectedCats={spawnResult.expectedCats}
                 isNight={isNight}
                 spriteIds={perchSprites}
+                spritesLoading={spritesLoading}
+                themeColors={themeColors}
                 readOnly
               />
             )}

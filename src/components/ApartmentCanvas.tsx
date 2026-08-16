@@ -84,6 +84,8 @@ export interface ApartmentCanvasProps {
    * list fall back to the 🐱 emoji, so omitting it keeps the old behaviour.
    */
   spriteIds?: string[];
+  /** Sprite ids still resolving — perches stay empty rather than flashing emoji. */
+  spritesLoading?: boolean;
   /** Hide empty slots and disable all interaction (friend view). */
   readOnly?: boolean;
   /** Theme sky colours show through the window. */
@@ -97,6 +99,7 @@ export function ApartmentCanvas({
   expectedCats,
   isNight,
   spriteIds,
+  spritesLoading = false,
   readOnly = false,
   themeColors,
   onPressEmptySlot,
@@ -299,6 +302,7 @@ export function ApartmentCanvas({
           offset={APARTMENT_PERCHES[i]}
           sleeping={isNight && occupied && i % 2 === 1}
           spriteId={spriteIds?.[i]}
+          pending={spritesLoading}
         />
       ))}
 

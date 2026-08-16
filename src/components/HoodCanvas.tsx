@@ -21,12 +21,13 @@ const CAT_OFFSETS: Array<{ left: number; bottom: number }> = [
   { left: 62, bottom: 32 },
 ];
 
-export function CatSlot({
+function CatSlotInner({
   index,
   isOccupied,
   offset,
   sleeping = false,
   spriteId,
+  pending = false,
 }: {
   index: number;
   isOccupied: boolean;
@@ -36,22 +37,29 @@ export function CatSlot({
   sleeping?: boolean;
   /** Sprite template id. Falls back to the 🐱 emoji when omitted. */
   spriteId?: string;
+  /** Sprite ids are still resolving — hold the empty perch rather than flash a fallback. */
+  pending?: boolean;
 }) {
   const { left, bottom } = offset ?? CAT_OFFSETS[index] ?? { left: 0, bottom: 0 };
   const bobAnim = useRef(new Animated.Value(0)).current;
 
+  // Sprites carry their own breathing loop; bobbing them as well reads as a hop
+  // rather than a breath. Tracked as a value so the transform can be detached
+  // entirely — leaving it attached kept six live native animation nodes alive
+  // per canvas doing nothing.
+  const usesBob = isOccupied && !sleeping && !spriteId && !pending;
+
   useEffect(() => {
-    // Sprites carry their own breathing loop; bobbing them as well reads as a
-    // hop rather than a breath.
-    if (!isOccupied || sleeping || spriteId) {
+    if (!usesBob) {
       bobAnim.stopAnimation();
       bobAnim.setValue(0);
       return;
     }
 
     // Stagger each slot so cats bob at different times (organic feel)
+    let loop: Animated.CompositeAnimation | null = null;
     const timer = setTimeout(() => {
-      Animated.loop(
+      loop = Animated.loop(
         Animated.sequence([
           Animated.timing(bobAnim, {
             toValue: -5,
@@ -67,34 +75,49 @@ export function CatSlot({
           }),
           Animated.delay(600 + index * 100),
         ]),
-      ).start();
+      );
+      loop.start();
     }, index * 280);
 
     return () => {
       clearTimeout(timer);
+      // Stopping the loop directly, rather than relying on stopAnimation to
+      // propagate a not-finished result up through it, is what actually
+      // guarantees the iteration halts.
+      loop?.stop();
       bobAnim.stopAnimation();
     };
   // bobAnim ref is stable — intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOccupied, index, sleeping, spriteId]);
+  }, [usesBob, index]);
+
+  // While sprite ids resolve, hold the vacant perch. Rendering the emoji here
+  // guaranteed a visible pop on every Hood entry, since the screen remounts
+  // with empty state each time.
+  const showCat = isOccupied && !pending;
 
   return (
     <Animated.View
       style={[
         { position: 'absolute', left: `${left}%`, bottom: `${bottom}%` },
-        { transform: [{ translateY: bobAnim }] },
+        usesBob ? { transform: [{ translateY: bobAnim }] } : null,
       ]}
       className="items-center"
     >
-      {isOccupied ? (
-        <View style={{ alignItems: 'center' }}>
+      {showCat ? (
+        <View style={{ alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
           {sleeping && (
             <Text style={{ position: 'absolute', top: -12, right: -14, fontSize: 13, opacity: 0.85 }}>
               💤
             </Text>
           )}
           {spriteId ? (
-            <CatSprite spriteId={spriteId} size={44} animation={sleeping ? 'sleep' : 'idle'} />
+            <CatSprite
+              spriteId={spriteId}
+              size={44}
+              animation={sleeping ? 'sleep' : 'idle'}
+              phase={index}
+            />
           ) : (
             <Text style={{ fontSize: 36 }}>🐱</Text>
           )}
@@ -109,6 +132,9 @@ export function CatSlot({
     </Animated.View>
   );
 }
+
+/** Memoised — the Hood re-renders on Shop, night-toggle and item-placement state. */
+export const CatSlot = React.memo(CatSlotInner);
 
 // ---------------------------------------------------------------------------
 // PlacedItemsOverlay
@@ -232,6 +258,8 @@ export interface HoodCanvasProps {
    * the previous behaviour.
    */
   spriteIds?: string[];
+  /** Sprite ids still resolving — perches stay empty rather than flashing emoji. */
+  spritesLoading?: boolean;
   /** Render a read-only "lock" badge instead of the cat count chip. */
   readOnly?: boolean;
   /** Optional theme colour overrides — sky gradient top colour and ground colour. */
@@ -248,6 +276,7 @@ export function HoodCanvas({
   expectedCats,
   isNight,
   spriteIds,
+  spritesLoading = false,
   readOnly = false,
   themeColors,
 }: HoodCanvasProps) {
@@ -307,6 +336,7 @@ export function HoodCanvas({
           isOccupied={occupied}
           sleeping={isNight && occupied && i % 2 === 1}
           spriteId={spriteIds?.[i]}
+          pending={spritesLoading}
         />
       ))}
 

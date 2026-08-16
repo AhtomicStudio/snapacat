@@ -16,10 +16,9 @@ import {
   calculateSpawnChances,
   canAddItem,
   getAttractionProfile,
-  MAX_HOOD_CATS,
   type PlaceableItemDef,
 } from '../utils/spawnCalculator';
-import { getCats } from '../services/dbService';
+import { usePerchSprites } from '../hooks/usePerchSprites';
 import { HoodCanvas, SpawnMeter } from '../components/HoodCanvas';
 import { ApartmentCanvas } from '../components/ApartmentCanvas';
 import { APARTMENT_SLOTS, autoAssignPlacements, getSlotById } from '../config/apartment';
@@ -200,37 +199,8 @@ function useHoodItems(
 export function HoodScreen({ hoodId, hood, onUpdateHood, onBack, progression, onUpdateProgression, userId }: HoodScreenProps) {
   const [isNight, setIsNight] = useState(false);
   const [showShop, setShowShop] = useState(false);
-  const [catSpriteIds, setCatSpriteIds] = useState<string[]>([]);
-
   // The cats that visit your Hood are the ones in your own Cat-a-log.
-  useEffect(() => {
-    let active = true;
-    getCats(userId)
-      .then((cats) => {
-        if (active) setCatSpriteIds(cats.map((c) => c.sprite_template_id).filter(Boolean));
-      })
-      .catch((err) => console.error('Failed to load cats for the Hood:', err));
-    return () => {
-      active = false;
-    };
-  }, [userId]);
-
-  /**
-   * Sprite for each perch. Cycles when the Cat-a-log holds fewer cats than
-   * there are perches, so every occupied slot shows a real cat instead of a
-   * mix of sprites and emoji fallbacks. Empty until the first cat is logged,
-   * which leaves the emoji placeholder in place.
-   */
-  const perchSprites = useMemo(
-    () =>
-      catSpriteIds.length === 0
-        ? []
-        : Array.from(
-            { length: MAX_HOOD_CATS },
-            (_, i) => catSpriteIds[i % catSpriteIds.length]!,
-          ),
-    [catSpriteIds],
-  );
+  const { perchSprites, loading: spritesLoading } = usePerchSprites(userId);
 
   // Resolve active theme and environment from Hood settings
   const activeTheme = useMemo(
@@ -448,6 +418,7 @@ export function HoodScreen({ hoodId, hood, onUpdateHood, onBack, progression, on
             expectedCats={spawnResult.expectedCats}
             isNight={effectiveIsNight}
             spriteIds={perchSprites}
+            spritesLoading={spritesLoading}
             themeColors={themeColors}
             onPressEmptySlot={setPickerSlotId}
             onPressPlacedItem={handlePressPlacedItem}
@@ -458,6 +429,7 @@ export function HoodScreen({ hoodId, hood, onUpdateHood, onBack, progression, on
             expectedCats={spawnResult.expectedCats}
             isNight={effectiveIsNight}
             spriteIds={perchSprites}
+            spritesLoading={spritesLoading}
             themeColors={themeColors}
           />
         )}
