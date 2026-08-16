@@ -80,7 +80,26 @@ function paintTabby(buf) {
     // by sign(x) flipped the stripe phase across the midline and left 36% of
     // mirrored pixel pairs disagreeing — most visibly on a front-facing head.
     const d = Math.abs(x - 15.5);
-    const bend = (y - 16) * (y - 16) * 0.035;
+    // Gentle splay only. At 0.035 the bars fanned fast enough that, mirrored
+    // about the spine on a front-facing pose, they resolved into a chevron
+    // across the chest rather than into stripes down the flanks.
+    const bend = (y - 16) * (y - 16) * 0.014;
+
+    // Necklace: one band across the upper chest, clear of the fluff at y21-23.
+    // A front-facing tabby's low-frequency signal has to run ACROSS the body —
+    // a dorsal spine is right on a side view and draws a bar down the chest
+    // here. Spanning the full width matters: leaving a gap at the centreline
+    // turned the band into a chevron that read as a heart marking.
+    if (y === 20 && d < 7.5) {
+      mark(buf, i);
+      return;
+    }
+    // Dark ear backs with a paler thumbprint. Lands at the top of the sprite
+    // where a solid-coloured breed has no structure at all.
+    if (REGIONS.isEar(x, y) && d > 3.5) {
+      mark(buf, i);
+      return;
+    }
 
     // Fine 33%-duty bars average straight back to the base coat when the sprite
     // is downsampled to phone size, which is how a grey tabby landed 2.57 ΔE
@@ -104,8 +123,12 @@ function paintClassicTabby(buf) {
     }
     // Rounded before the modulo so the two mirrored centres stay in phase.
     for (const [ox, oy] of [[11.5, 22], [20.5, 22]]) {
+      // 33% duty against the mackerel's 43%. "Blotched" means broad marks with
+      // more open coat between them, and block-averaging discards shape — so
+      // the two tabby families need different COVERAGE, not just different
+      // geometry, or they collapse onto each other when downsampled.
       const r = Math.round(Math.hypot(x - ox, (y - oy) * 1.15));
-      if (r % 8 < 3) {
+      if (r % 9 < 3) {
         mark(buf, i);
         return;
       }
@@ -176,6 +199,32 @@ function paintTortie(buf) {
       hash2(Math.floor(u * 2.3), Math.floor(v * 2.3)) * 0.4;
     if (n > 0.48) mark(buf, i);
   });
+}
+
+/**
+ * Tabby bars laid over tortie patches.
+ *
+ * A torbie is genetically a tortie that also carries the tabby gene — the same
+ * relationship lynx_point has to seal_point. Without the bars it is
+ * tortoiseshell in a slightly lighter orange, and the two measured 5.77 ΔE
+ * apart, which is a collision at display size.
+ */
+function paintTortieBars(buf) {
+  for (let y = 0; y < FRAME_SIZE; y++) {
+    for (let x = 0; x < FRAME_SIZE; x++) {
+      const i = idx(x, y);
+      if (REGIONS.isMuzzle(x, y)) continue;
+
+      const d = Math.abs(x - 15.5);
+      const bend = (y - 16) * (y - 16) * 0.035;
+      if ((Math.round(d + bend) + 64) % 7 >= 3) continue;
+
+      const s = buf[i];
+      if (isCoat(s)) mark(buf, i);
+      else if (s === SLOT.PATTERN) buf[i] = SLOT.PATTERN_DARK;
+      else if (s === SLOT.PATTERN_LIGHT) buf[i] = SLOT.PATTERN;
+    }
+  }
 }
 
 /** Colourpoint: dark extremities — ears, muzzle, paws, tail. */
@@ -250,6 +299,8 @@ function applyPattern(frame, breed) {
       break;
     case 'tortie':
       paintTortie(out);
+      // A torbie is a tortie carrying the tabby gene.
+      if (breed.id === 'torbie') paintTortieBars(out);
       // Calico is tortie patches plus white spotting; tortoiseshell has no
       // white at all, which is exactly what separates the two in real genetics.
       if (breed.hasWhite) paintBicolor(out);

@@ -136,19 +136,19 @@ const EAR_INNER = [
  * poseSit) separates the two masses cleanly with no transparent channel.
  */
 const TAIL = [
-  [28, 26, 29],
-  [27, 26, 29],
-  [26, 26, 29],
+  [28, 25, 29],
+  [27, 25, 29],
+  [26, 25, 29],
   [25, 25, 28],
   [24, 25, 28],
   [23, 24, 27],
   [22, 24, 27],
   [21, 23, 26],
-  [20, 22, 25],
-  [19, 21, 24],
-  [18, 21, 23],
-  [17, 20, 22],
-  [16, 20, 21],
+  [20, 23, 25],
+  [19, 22, 24],
+  [18, 22, 23],
+  [17, 21, 22],
+  [16, 21, 21],
 ];
 
 // ---------------------------------------------------------------------------
@@ -338,10 +338,35 @@ function poseSit(breath = 0) {
     }
   }
 
+  // A 3px-wide tail can no more carry a gradient than a 3px ear can; the
+  // distance-field gradient flips on the rows where the tail steps left, which
+  // made the shadow edge step in, out, then in again down its length.
+  for (const [y, x0, x1] of TAIL) {
+    for (let x = x0; x <= x1; x++) {
+      const s = buf[idx(x, y)];
+      if (s !== SLOT.COAT_BASE && s !== SLOT.COAT_DARK && s !== SLOT.COAT_LIGHT) continue;
+      buf[idx(x, y)] = x >= x1 ? SLOT.COAT_DARK : SLOT.COAT_BASE;
+    }
+  }
+
   // Soft edge where the tail lies against the body. Without it the two masses
   // fuse into one silhouette, since they are deliberately adjacent.
+  //
+  // The separator's x steps diagonally down the tail, and a diagonal run of
+  // single pixels is not 4-connected — its first three pixels rendered as
+  // detached dots before the line went solid. Bridging each step horizontally
+  // makes the whole run continuous without widening it where it already was.
+  let prevX = null;
   for (const [y, x0] of TAIL) {
-    if (y >= 19) setPx(buf, x0, y, SLOT.OUTLINE_SOFT);
+    if (y < 19) {
+      prevX = x0;
+      continue;
+    }
+    setPx(buf, x0, y, SLOT.OUTLINE_SOFT);
+    if (prevX !== null && Math.abs(x0 - prevX) === 1) {
+      setPx(buf, prevX, y, SLOT.OUTLINE_SOFT);
+    }
+    prevX = x0;
   }
 
   // ── Occlusion. This does more for head/body separation at 40px than the
@@ -351,8 +376,9 @@ function poseSit(breath = 0) {
     recolorRect(buf, 12, 19, 19, 19, s, SLOT.COAT_SHADOW);
   }
 
-  // Chest fluff, tapered rather than rectangular.
-  for (const [y, x0, x1] of [[21, 14, 17], [22, 13, 18], [23, 14, 17]]) {
+  // Chest fluff: widest at the throat, narrowing downward, like a ruff. A
+  // symmetric diamond reads as a heart locket once the tabby bars frame it.
+  for (const [y, x0, x1] of [[21, 13, 18], [22, 14, 17], [23, 15, 16]]) {
     recolorRect(buf, x0, y, x1, y, SLOT.COAT_BASE, SLOT.FUR_LIGHT);
   }
 
@@ -473,7 +499,17 @@ function poseSleep(breath = 0) {
   // the curled body fuse into one undifferentiated loaf — measured, the head
   // and dome share a continuous silhouette from x3 to x29 with nothing to
   // mark where one ends.
-  for (const [y, , x1] of head) setPx(buf, x1 + 1, y, SLOT.OUTLINE_SOFT);
+  // Bridged for the same reason as the sit tail's separator — the line steps
+  // diagonally, so its leading pixel detached.
+  let prevShoulder = null;
+  for (const [y, , x1] of head) {
+    const sx = x1 + 1;
+    setPx(buf, sx, y, SLOT.OUTLINE_SOFT);
+    if (prevShoulder !== null && Math.abs(sx - prevShoulder) === 1) {
+      setPx(buf, prevShoulder, y, SLOT.OUTLINE_SOFT);
+    }
+    prevShoulder = sx;
+  }
 
   // Inner ear, near side only, kept small.
   span(buf, 19, 9, 10, SLOT.PINK);
