@@ -8,7 +8,8 @@
     "start": "react-native start",
     "lint": "eslint .",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sprites": "node scripts/sprites/build.js"
   },
   "dependencies": {
     "@react-native-firebase/app": "^24.1.1",
