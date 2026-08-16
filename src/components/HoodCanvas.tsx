@@ -6,6 +6,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, View, Text } from 'react-native';
 import { PLACEABLE_ITEMS, MAX_HOOD_CATS, type SpawnResult } from '../utils/spawnCalculator';
 import { INNER_SHADOW } from '../utils/styles';
+import { CatSprite } from './CatSprite';
 
 // ---------------------------------------------------------------------------
 // CatSlot
@@ -25,6 +26,7 @@ export function CatSlot({
   isOccupied,
   offset,
   sleeping = false,
+  spriteId,
 }: {
   index: number;
   isOccupied: boolean;
@@ -32,12 +34,16 @@ export function CatSlot({
   offset?: { left: number; bottom: number };
   /** Renders a dozing cat (💤, no bob) — used for some cats at night. */
   sleeping?: boolean;
+  /** Sprite template id. Falls back to the 🐱 emoji when omitted. */
+  spriteId?: string;
 }) {
   const { left, bottom } = offset ?? CAT_OFFSETS[index] ?? { left: 0, bottom: 0 };
   const bobAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isOccupied || sleeping) {
+    // Sprites carry their own breathing loop; bobbing them as well reads as a
+    // hop rather than a breath.
+    if (!isOccupied || sleeping || spriteId) {
       bobAnim.stopAnimation();
       bobAnim.setValue(0);
       return;
@@ -70,7 +76,7 @@ export function CatSlot({
     };
   // bobAnim ref is stable — intentionally omitted from deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOccupied, index, sleeping]);
+  }, [isOccupied, index, sleeping, spriteId]);
 
   return (
     <Animated.View
@@ -87,7 +93,11 @@ export function CatSlot({
               💤
             </Text>
           )}
-          <Text style={{ fontSize: 36 }}>🐱</Text>
+          {spriteId ? (
+            <CatSprite spriteId={spriteId} size={44} animation={sleeping ? 'sleep' : 'idle'} />
+          ) : (
+            <Text style={{ fontSize: 36 }}>🐱</Text>
+          )}
         </View>
       ) : (
         /* Vacant slot: warm dashed ring, not a cold grey */
@@ -216,6 +226,12 @@ export interface HoodCanvasProps {
   placedItems: string[];
   expectedCats: number;
   isNight: boolean;
+  /**
+   * Sprite template ids to perch in the occupied slots, in order. Slots beyond
+   * the end of this list fall back to the 🐱 emoji, so passing nothing keeps
+   * the previous behaviour.
+   */
+  spriteIds?: string[];
   /** Render a read-only "lock" badge instead of the cat count chip. */
   readOnly?: boolean;
   /** Optional theme colour overrides — sky gradient top colour and ground colour. */
@@ -231,6 +247,7 @@ export function HoodCanvas({
   placedItems,
   expectedCats,
   isNight,
+  spriteIds,
   readOnly = false,
   themeColors,
 }: HoodCanvasProps) {
@@ -289,6 +306,7 @@ export function HoodCanvas({
           index={i}
           isOccupied={occupied}
           sleeping={isNight && occupied && i % 2 === 1}
+          spriteId={spriteIds?.[i]}
         />
       ))}
 
