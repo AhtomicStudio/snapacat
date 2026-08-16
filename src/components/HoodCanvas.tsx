@@ -21,6 +21,19 @@ const CAT_OFFSETS: Array<{ left: number; bottom: number }> = [
   { left: 62, bottom: 32 },
 ];
 
+// Perch tables are indexed by slot, but the slot count comes from
+// MAX_HOOD_CATS. Raising the cap without extending them would silently stack
+// the extra cats in the bottom-left corner via the `?? { left: 0, bottom: 0 }`
+// fallback below — a layout bug, and the first thing to break, well before
+// framerate is a concern.
+// `typeof` guard because __DEV__ is a React Native global and this module is
+// also loaded by the Jest suite, which runs in a plain node environment.
+if (typeof __DEV__ !== 'undefined' && __DEV__ && CAT_OFFSETS.length !== MAX_HOOD_CATS) {
+  throw new Error(
+    `CAT_OFFSETS defines ${CAT_OFFSETS.length} perches but MAX_HOOD_CATS is ${MAX_HOOD_CATS}.`,
+  );
+}
+
 function CatSlotInner({
   index,
   isOccupied,

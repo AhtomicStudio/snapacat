@@ -205,9 +205,24 @@ export const SPRITE_SHEETS: Record<string, ImageSourcePropType> = {
 ${entries}
 };
 
-/** Returns the sheet for a sprite id, falling back to the first breed. */
+/**
+ * Returns the sheet for a sprite id, falling back to the first breed.
+ *
+ * The fallback is deliberate — a renamed breed or a legacy Firestore document
+ * should still render a cat — but it is silent, which turns "every cat is a
+ * brown tabby" into a mystery. Warn in development.
+ */
 export function getSpriteSheet(spriteId: string): ImageSourcePropType {
-  return SPRITE_SHEETS[spriteId] ?? SPRITE_SHEETS['${breeds[0].id}']!;
+  const sheet = SPRITE_SHEETS[spriteId];
+  if (!sheet) {
+    // typeof guard: __DEV__ is a React Native global, and this module is also
+    // loaded by the Jest suite, which runs in a plain node environment.
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(\`[sprites] Unknown sprite id "\${spriteId}" — falling back to ${breeds[0].id}.\`);
+    }
+    return SPRITE_SHEETS['${breeds[0].id}']!;
+  }
+  return sheet;
 }
 `;
 
