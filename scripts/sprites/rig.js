@@ -106,10 +106,14 @@ const EAR = [
   [8, 8, 14],
 ];
 
+/**
+ * Inner ear. Deliberately smaller than the ear it sits in — at the previous
+ * size the pink filled all but one column on each side, and 20 hot-pink pixels
+ * on a 32px cat read as antennae rather than ears.
+ */
 const EAR_INNER = [
-  [5, 10, 11],
-  [6, 10, 12],
-  [7, 9, 12],
+  [6, 10, 11],
+  [7, 10, 12],
 ];
 
 /**
@@ -122,20 +126,29 @@ const EAR_INNER = [
  * both on the same row. Stepping both edges together at y21 produced two
  * straight bars joined by a visible jog.
  */
+/**
+ * Raised tail, hugging the body with its left edge at exactly `bodyRight + 1`
+ * on every row it touches.
+ *
+ * The previous table drifted in and out of contact — merging at y22/24/26 and
+ * leaving a gap at y21/23/25 — which read as a lumpy extension of the hip
+ * rather than a tail. Consistent adjacency plus a soft edge (applied in
+ * poseSit) separates the two masses cleanly with no transparent channel.
+ */
 const TAIL = [
-  [28, 25, 27],
-  [27, 25, 28],
-  [26, 26, 28],
-  [25, 26, 28],
+  [28, 26, 29],
+  [27, 26, 29],
+  [26, 26, 29],
+  [25, 25, 28],
   [24, 25, 28],
-  [23, 25, 27],
+  [23, 24, 27],
   [22, 24, 27],
-  [21, 24, 26],
-  [20, 23, 26],
-  [19, 23, 25],
-  [18, 22, 24],
-  [17, 21, 23],
-  [16, 21, 22],
+  [21, 23, 26],
+  [20, 22, 25],
+  [19, 21, 24],
+  [18, 21, 23],
+  [17, 20, 22],
+  [16, 20, 21],
 ];
 
 // ---------------------------------------------------------------------------
@@ -216,7 +229,13 @@ function applyShading(buf) {
  * Removes isolated shading pixels. Single-pixel value changes are the main
  * cause of sprites reading as noisy once scaled down on a phone.
  */
-const LOOSE_SLOTS = [SLOT.COAT_LIGHT, SLOT.COAT_DARK, SLOT.COAT_SHADOW, SLOT.FUR_LIGHT];
+/**
+ * Only lambert output is despeckled. Authored slots (FUR_LIGHT, COAT_SHADOW)
+ * are deliberate placements, and including them meant the pass quietly ate the
+ * 1px taper off the chest fluff and the paw edges — the shading cleanup was
+ * deleting the very features it ran after.
+ */
+const LOOSE_SLOTS = [SLOT.COAT_LIGHT, SLOT.COAT_DARK];
 
 function despeckle(buf) {
   // Reverting one pixel can newly isolate its neighbour, and a single pass
@@ -319,9 +338,16 @@ function poseSit(breath = 0) {
     }
   }
 
+  // Soft edge where the tail lies against the body. Without it the two masses
+  // fuse into one silhouette, since they are deliberately adjacent.
+  for (const [y, x0] of TAIL) {
+    if (y >= 19) setPx(buf, x0, y, SLOT.OUTLINE_SOFT);
+  }
+
   // ── Occlusion. This does more for head/body separation at 40px than the
-  //    entire lighting ramp does. ──────────────────────────────────────────
-  for (const s of [SLOT.COAT_BASE, SLOT.COAT_LIGHT]) {
+  //    entire lighting ramp does. COAT_DARK is included because the neck pinch
+  //    already shades dark there, and omitting it left the bar 2px wide. ─────
+  for (const s of [SLOT.COAT_BASE, SLOT.COAT_LIGHT, SLOT.COAT_DARK]) {
     recolorRect(buf, 12, 19, 19, 19, s, SLOT.COAT_SHADOW);
   }
 
@@ -331,9 +357,15 @@ function poseSit(breath = 0) {
   }
 
   // ── Front paws ────────────────────────────────────────────────────────────
-  for (const [y, x0, x1] of [[28, 9, 13], [29, 8, 13], [30, 9, 13]]) {
+  for (const [y, x0, x1] of [[28, 10, 13], [29, 9, 13], [30, 9, 12]]) {
     span(buf, y, x0, x1, SLOT.FUR_LIGHT);
     span(buf, y, 31 - x1, 31 - x0, SLOT.FUR_LIGHT);
+  }
+  // Toe split. Two pixels per mitt is the cheapest thing that stops a paw
+  // reading as a rounded block.
+  for (const y of [29, 30]) {
+    setPx(buf, 11, y, SLOT.OUTLINE_SOFT);
+    setPx(buf, 20, y, SLOT.OUTLINE_SOFT);
   }
   // A 2px gap reads as the space between the front legs; 4px read as a hole.
   for (let y = 28; y <= 30; y++) span(buf, y, 15, 16, SLOT.COAT_SHADOW);
@@ -354,8 +386,10 @@ function poseSit(breath = 0) {
   // pixel per row to carry it.
   setPx(buf, 11, 13, SLOT.EYE_DARK);
   setPx(buf, 20, 13, SLOT.EYE_DARK);
-  // Shine top-left on both eyes — one light source, consistently placed.
-  setPx(buf, 12, 12, SLOT.EYE_SHINE);
+  // Shine on the top-LEFT pixel of each eye — one light source, and the same
+  // corner on both. Previously the left eye's shine sat in its middle column
+  // while the right eye's sat on its edge, which reads as a squint.
+  setPx(buf, 11, 12, SLOT.EYE_SHINE);
   setPx(buf, 18, 12, SLOT.EYE_SHINE);
 
   // Muzzle: two lighter lobes with the nose at the seam. This is the single
@@ -424,18 +458,25 @@ function poseSleep(breath = 0) {
   ];
   for (const [y, x0, x1] of head) span(buf, y, x0, x1, SLOT.COAT_BASE);
 
-  // Near ear folded back, far ear reduced to a sliver — that asymmetry is what
-  // signals a viewing angle. Both tips stay below the crown.
+  // Near ear only, folded back, topping out at y18 — one row below the crown
+  // at y17. The arch of the back has to be the highest point on the sprite;
+  // level with the ear tips it reads as a loaf with bumps. The far ear is
+  // dropped: at this angle it lands inside the dome and adds only noise.
   const ears = [
-    [17, 9, 11], [18, 8, 11], [19, 6, 12],
-    [19, 13, 15], [20, 13, 16],
+    [18, 9, 11], [19, 8, 12],
   ];
   for (const [y, x0, x1] of ears) span(buf, y, x0, x1, SLOT.COAT_BASE);
 
   applyShading(buf);
 
-  // Inner ear, near side only.
-  span(buf, 19, 8, 10, SLOT.PINK);
+  // Shoulder line at the head's trailing edge. Without it the tucked head and
+  // the curled body fuse into one undifferentiated loaf — measured, the head
+  // and dome share a continuous silhouette from x3 to x29 with nothing to
+  // mark where one ends.
+  for (const [y, , x1] of head) setPx(buf, x1 + 1, y, SLOT.OUTLINE_SOFT);
+
+  // Inner ear, near side only, kept small.
+  span(buf, 19, 9, 10, SLOT.PINK);
 
   // Muzzle wedge at the snout end.
   span(buf, 24, 2, 5, SLOT.FUR_LIGHT);
@@ -447,26 +488,33 @@ function poseSleep(breath = 0) {
   span(buf, 22, 7, 8, SLOT.OUTLINE_SOFT);
   setPx(buf, 9, 21, SLOT.OUTLINE_SOFT);
 
-  // Tail emerges behind the rump, sweeps across the front, and curls up beside
-  // the muzzle. Tapers 6px -> 4px -> 3px.
+  // Tail emerges behind the rump and sweeps across the front toward the head.
+  // Each row overlaps the next in x so the curve reads as continuous; the
+  // earlier table had two disjoint segments and left a hole at y28.
   const sleepTail = [
-    [27, 21, 26],
-    [28, 15, 26],
-    [29, 10, 22],
-    [28, 8, 12],
-    [27, 7, 10],
+    [26, 23, 27],
+    [27, 17, 26],
+    [28, 11, 22],
+    [29, 9, 17],
   ];
-  for (const [y, x0, x1] of sleepTail) span(buf, y, x0, x1, SLOT.COAT_BASE);
-
-  // Separator that follows the tail's actual curve rather than a hardcoded
-  // straight line, so it stays correct when the table is retuned.
+  const tailPx = new Set();
   for (const [y, x0, x1] of sleepTail) {
     for (let x = x0; x <= x1; x++) {
-      if (!inBounds(x, y - 1)) continue;
-      const above = buf[idx(x, y - 1)];
-      if (above === SLOT.COAT_BASE || above === SLOT.COAT_DARK || above === SLOT.COAT_LIGHT) {
-        buf[idx(x, y - 1)] = SLOT.OUTLINE_SOFT;
-      }
+      span(buf, y, x, x, SLOT.COAT_BASE);
+      tailPx.add(`${x},${y}`);
+    }
+  }
+
+  // Separator follows the tail's actual curve rather than a hardcoded straight
+  // line, so it stays correct when the table is retuned. Skipping pixels that
+  // are themselves tail is what stops overlapping rows from converting each
+  // other — that bug turned 42 pixels of the belly into separator.
+  for (const key of tailPx) {
+    const [x, y] = key.split(',').map(Number);
+    if (tailPx.has(`${x},${y - 1}`) || !inBounds(x, y - 1)) continue;
+    const above = buf[idx(x, y - 1)];
+    if (above === SLOT.COAT_BASE || above === SLOT.COAT_DARK || above === SLOT.COAT_LIGHT) {
+      buf[idx(x, y - 1)] = SLOT.OUTLINE_SOFT;
     }
   }
 
