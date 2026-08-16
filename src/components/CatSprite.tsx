@@ -21,6 +21,7 @@ import {
   getSpriteSheet,
   type SpriteAnimation,
 } from '../assets/sprites';
+import { buildFrameInterpolation } from './spriteFrames';
 
 export interface CatSpriteProps {
   /** Sprite template id, e.g. "brown_mackerel_tabby". */
@@ -62,27 +63,14 @@ export function snapSize(desiredDp: number): number {
   return (blocks * SOURCE_FRAME_SIZE) / density;
 }
 
-/**
- * Drives frame selection from a single native-driven value.
- *
- * Each frame contributes a flat segment to the interpolation, with a 1ms step
- * between segments so frames cut rather than slide.
- */
+/** Drives frame selection from a single native-driven value. */
 function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean, phase: number) {
   const t = useRef(new Animated.Value(0)).current;
 
-  const { inputRange, outputRange, total } = useMemo(() => {
-    const input: number[] = [];
-    const output: number[] = [];
-    let at = 0;
-    anim.frames.forEach((frameIndex, i) => {
-      const hold = Math.max(2, anim.durations[i] ?? 400);
-      input.push(at, at + hold - 1);
-      output.push(-frameIndex * size, -frameIndex * size);
-      at += hold;
-    });
-    return { inputRange: input, outputRange: output, total: at };
-  }, [anim, size]);
+  const { inputRange, outputRange, total } = useMemo(
+    () => buildFrameInterpolation(anim, size),
+    [anim, size],
+  );
 
   useEffect(() => {
     t.setValue(0);
@@ -99,7 +87,11 @@ function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean,
 
     // Offsetting the start time rather than the start value keeps every cycle
     // complete; seeding the value instead would clip the frames before it.
-    const delay = (phase * 173) % 400;
+    //
+    // Spread across the whole cycle, not a fixed 400ms window — at six perches
+    // a 400ms spread put slots 0 and 5 within four display frames of each
+    // other, which still reads as simultaneous.
+    const delay = (phase * 173) % total;
     const timer = setTimeout(() => loop.start(), delay);
 
     return () => {
@@ -108,7 +100,10 @@ function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean,
     };
   }, [t, total, paused, phase]);
 
-  return t.interpolate({ inputRange, outputRange, extrapolate: 'clamp' });
+  return useMemo(
+    () => t.interpolate({ inputRange, outputRange, extrapolate: 'clamp' }),
+    [t, inputRange, outputRange],
+  );
 }
 
 function CatSpriteInner({
@@ -145,7 +140,3 @@ function CatSpriteInner({
  * all six sprites. Props are fully stable now that the loop lives natively.
  */
 export const CatSprite = React.memo(CatSpriteInner);
-
-// FRAME_SIZE is the shipped (4x) frame; exported for callers that need to
-// reason about the sheet rather than the display size.
-export { FRAME_SIZE };

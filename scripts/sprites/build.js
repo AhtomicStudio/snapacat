@@ -140,6 +140,29 @@ function composeSheet(frames, palette, shadows = []) {
   return { rgba, width, height };
 }
 
+/**
+ * Fails the build if any frame's art touches its own edge.
+ *
+ * Frames are packed with no gutter, which is safe only while every pose leaves
+ * a transparent margin — measured at exactly one source pixel today, with no
+ * slack. Widen a pose by a pixel and the clip window starts sampling the
+ * neighbouring frame, showing a sliver of the wrong pose. Nothing else would
+ * catch that.
+ */
+function assertFrameMargins(rgba, width, frameCount, framePx) {
+  for (let f = 0; f < frameCount; f++) {
+    for (const x of [f * framePx, f * framePx + framePx - 1]) {
+      for (let y = 0; y < framePx; y++) {
+        if (rgba[(y * width + x) * 4 + 3] !== 0) {
+          throw new Error(
+            `Frame ${f} touches its edge at x=${x}, y=${y}. Narrow the pose or add a gutter.`,
+          );
+        }
+      }
+    }
+  }
+}
+
 function writeSheet(filePath, rgba, width, height, scale) {
   const scaled = upscaleRGBA(rgba, width, height, scale);
   fs.writeFileSync(filePath, encodePNG(width * scale, height * scale, scaled));
@@ -353,6 +376,7 @@ function main() {
     const rendered = renderBreed(frames, breed);
     const palette = resolvePalette(breed);
     const { rgba, width, height } = composeSheet(rendered, palette, shadowsOf(frames));
+    assertFrameMargins(rgba, width, frames.length, FRAME_SIZE);
     writeSheet(path.join(OUT_DIR, `${breed.id}.png`), rgba, width, height, DISPLAY_SCALE);
   }
 

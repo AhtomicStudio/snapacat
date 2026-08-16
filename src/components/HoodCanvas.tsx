@@ -12,27 +12,31 @@ import { CatSprite } from './CatSprite';
 // CatSlot
 // ---------------------------------------------------------------------------
 
-const CAT_OFFSETS: Array<{ left: number; bottom: number }> = [
+const CAT_OFFSETS = [
   { left: 8,  bottom: 12 },
   { left: 28, bottom: 18 },
   { left: 52, bottom: 10 },
   { left: 72, bottom: 20 },
   { left: 18, bottom: 36 },
   { left: 62, bottom: 32 },
-];
+] as const;
 
-// Perch tables are indexed by slot, but the slot count comes from
-// MAX_HOOD_CATS. Raising the cap without extending them would silently stack
-// the extra cats in the bottom-left corner via the `?? { left: 0, bottom: 0 }`
-// fallback below — a layout bug, and the first thing to break, well before
-// framerate is a concern.
-// `typeof` guard because __DEV__ is a React Native global and this module is
-// also loaded by the Jest suite, which runs in a plain node environment.
-if (typeof __DEV__ !== 'undefined' && __DEV__ && CAT_OFFSETS.length !== MAX_HOOD_CATS) {
-  throw new Error(
-    `CAT_OFFSETS defines ${CAT_OFFSETS.length} perches but MAX_HOOD_CATS is ${MAX_HOOD_CATS}.`,
-  );
-}
+/**
+ * Perch tables are indexed by slot, but the slot count comes from
+ * MAX_HOOD_CATS. Raising the cap without extending them would silently stack
+ * the extra cats in the bottom-left corner via the `?? { left: 0, bottom: 0 }`
+ * fallback — a layout bug, and the first thing to break, well before framerate
+ * is a concern.
+ *
+ * Enforced at compile time rather than behind a __DEV__ check: __DEV__ is
+ * undefined under Jest's node environment, so a runtime guard would never
+ * execute in CI and could only fire on a dev device.
+ */
+type PerchCountMatches = typeof CAT_OFFSETS['length'] extends typeof MAX_HOOD_CATS
+  ? true
+  : never;
+const _perchCountMatches: PerchCountMatches = true;
+void _perchCountMatches;
 
 function CatSlotInner({
   index,
@@ -118,7 +122,13 @@ function CatSlotInner({
       className="items-center"
     >
       {showCat ? (
-        <View style={{ alignItems: 'center' }} importantForAccessibility="no-hide-descendants">
+        <View
+          style={{ alignItems: 'center' }}
+          // Decorative. importantForAccessibility is Android-only, so iOS needs
+          // the companion prop or TalkBack's counterpart still reads the 💤.
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
           {sleeping && (
             <Text style={{ position: 'absolute', top: -12, right: -14, fontSize: 13, opacity: 0.85 }}>
               💤

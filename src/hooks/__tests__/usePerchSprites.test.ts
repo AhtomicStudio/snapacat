@@ -3,7 +3,38 @@
 // Firebase SDK, which ships ESM that this suite's transform cannot parse.
 jest.mock('../../services/dbService', () => ({ getCats: jest.fn() }));
 
-import { buildPerchSprites } from '../usePerchSprites';
+import { buildPerchSprites, isFresh } from '../usePerchSprites';
+
+/**
+ * The cache is what makes a repeat Hood visit instant, and it is also what
+ * previously made a newly logged cat invisible — the entry never expired and
+ * nothing invalidated it, so the Hood served a list fetched before the cat
+ * existed. These assertions pin the staleness rule that replaced it.
+ */
+describe('isFresh', () => {
+  const now = 1_000_000;
+
+  it('treats a missing entry as stale, so a cold uid always fetches', () => {
+    expect(isFresh(undefined, now)).toBe(false);
+  });
+
+  it('serves an entry written moments ago', () => {
+    expect(isFresh({ ids: ['a'], at: now - 1_000 }, now)).toBe(true);
+  });
+
+  it('expires an entry past the five-minute TTL', () => {
+    expect(isFresh({ ids: ['a'], at: now - 5 * 60_000 - 1 }, now)).toBe(false);
+  });
+
+  it('still serves an entry a second before the TTL', () => {
+    expect(isFresh({ ids: ['a'], at: now - (5 * 60_000 - 1_000) }, now)).toBe(true);
+  });
+
+  it('treats an empty Cat-a-log as a real cached answer, not a miss', () => {
+    // [] means "this user has no cats" and must not trigger a refetch loop.
+    expect(isFresh({ ids: [], at: now }, now)).toBe(true);
+  });
+});
 
 /**
  * The cycling rule decides what a player sees on every Hood entry, and it has

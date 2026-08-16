@@ -14,6 +14,7 @@ import { CARD_SHADOW, BUTTON_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/st
 import type { CatGender, HexColor, UserProgression } from '../types';
 import type { RGB } from '../utils/colorExtractor';
 import { awardPawPoints, PAW_POINT_REWARDS } from '../utils/progressionEngine';
+import { invalidatePerchSprites } from '../hooks/usePerchSprites';
 import { SPRITE_LIBRARY, getSpriteById, RARITY_STARS } from '../utils/spriteLibrary';
 
 export interface FieldNotesScreenProps {
@@ -96,6 +97,11 @@ export function FieldNotesScreen({
       } else {
         const newCat = await createCat(catName.trim(), gender, spriteTemplateId, userId);
         catId = newCat.cat_id;
+        // The Hood perches are cached per uid, so without this the cat you just
+        // logged would not show up there — which is the whole loop. Only the
+        // new-cat branch needs it; a scrapbook entry on an existing cat changes
+        // no sprite_template_id.
+        invalidatePerchSprites(userId);
       }
 
       await addScrapbookEntry(catId, {

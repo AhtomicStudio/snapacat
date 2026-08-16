@@ -15,14 +15,21 @@ import { CatSlot } from './HoodCanvas';
 
 // Cat perches arranged for the room (percent from left / bottom).
 // Order = fill order: first cats appear in the most natural spots.
-const APARTMENT_PERCHES: Array<{ left: number; bottom: number }> = [
+const APARTMENT_PERCHES = [
   { left: 46, bottom: 10 },  // on the rug, front and centre
   { left: 22, bottom: 36 },  // sofa seat
   { left: 63, bottom: 53 },  // windowsill
   { left: 86, bottom: 12 },  // floor, right corner
   { left: 5,  bottom: 47 },  // sofa arm
   { left: 30, bottom: 4  },  // floor, front left
-];
+] as const;
+
+/** Same compile-time coupling check as CAT_OFFSETS in HoodCanvas. */
+type ApartmentPerchCountMatches = typeof APARTMENT_PERCHES['length'] extends typeof MAX_HOOD_CATS
+  ? true
+  : never;
+const _apartmentPerchCountMatches: ApartmentPerchCountMatches = true;
+void _apartmentPerchCountMatches;
 
 // Palette — day / night pairs for the interior
 const COLORS = {
