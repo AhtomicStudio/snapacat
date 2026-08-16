@@ -79,6 +79,11 @@ export interface ApartmentCanvasProps {
   placements: Record<string, string>;
   expectedCats: number;
   isNight: boolean;
+  /**
+   * Sprite template ids to perch, in fill order. Slots past the end of this
+   * list fall back to the 🐱 emoji, so omitting it keeps the old behaviour.
+   */
+  spriteIds?: string[];
   /** Hide empty slots and disable all interaction (friend view). */
   readOnly?: boolean;
   /** Theme sky colours show through the window. */
@@ -91,6 +96,7 @@ export function ApartmentCanvas({
   placements,
   expectedCats,
   isNight,
+  spriteIds,
   readOnly = false,
   themeColors,
   onPressEmptySlot,
@@ -292,6 +298,7 @@ export function ApartmentCanvas({
           isOccupied={occupied}
           offset={APARTMENT_PERCHES[i]}
           sleeping={isNight && occupied && i % 2 === 1}
+          spriteId={spriteIds?.[i]}
         />
       ))}
 

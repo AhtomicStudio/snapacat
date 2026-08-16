@@ -7,8 +7,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { getFriendHoods } from '../services/dbService';
-import { PLACEABLE_ITEMS, calculateSpawnChances } from '../utils/spawnCalculator';
+import { getFriendHoods, getCats } from '../services/dbService';
+import { PLACEABLE_ITEMS, calculateSpawnChances, MAX_HOOD_CATS } from '../utils/spawnCalculator';
 import { HoodCanvas, SpawnMeter } from '../components/HoodCanvas';
 import { ApartmentCanvas } from '../components/ApartmentCanvas';
 import { autoAssignPlacements } from '../config/apartment';
@@ -126,6 +126,34 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
   const [friendData, setFriendData] = useState<FriendData | null>(null);
   const [selectedHoodId, setSelectedHoodId] = useState<string | null>(null);
   const [isNight, setIsNight] = useState(false);
+  const [catSpriteIds, setCatSpriteIds] = useState<string[]>([]);
+
+  // Cats perched in a friend's Hood are the cats from THEIR Cat-a-log.
+  useEffect(() => {
+    let cancelled = false;
+    getCats(friendUid)
+      .then((cats) => {
+        if (!cancelled) {
+          setCatSpriteIds(cats.map((c) => c.sprite_template_id).filter(Boolean));
+        }
+      })
+      .catch((err) => console.error("Failed to load friend's cats:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [friendUid]);
+
+  /** Cycles so every occupied perch shows a real cat. See HoodScreen. */
+  const perchSprites = useMemo(
+    () =>
+      catSpriteIds.length === 0
+        ? []
+        : Array.from(
+            { length: MAX_HOOD_CATS },
+            (_, i) => catSpriteIds[i % catSpriteIds.length]!,
+          ),
+    [catSpriteIds],
+  );
 
   // ---- Fetch friend data ----
   useEffect(() => {
@@ -323,6 +351,7 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
                 placements={placements}
                 expectedCats={spawnResult.expectedCats}
                 isNight={isNight}
+                spriteIds={perchSprites}
                 readOnly
               />
             ) : (
@@ -330,6 +359,7 @@ export function FriendHoodScreen({ friendUid, onBack }: FriendHoodScreenProps) {
                 placedItems={selectedHood.placed_items}
                 expectedCats={spawnResult.expectedCats}
                 isNight={isNight}
+                spriteIds={perchSprites}
                 readOnly
               />
             )}
