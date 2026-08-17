@@ -1,0 +1,271 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SnapaCat — sprite preview</title>
+<!--
+  Standalone review harness for the 8-direction sprite sheets.
+
+  MUST be opened from disk, e.g.
+    file:///G:/Projects/SnapaCat/scripts/sprites/preview.html
+  The sheets are referenced by relative path, so a data: URL or an inlined copy
+  has no filesystem base to resolve against and every sprite silently renders
+  blank — background images fail without a console error.
+
+  No server and no build step. Sheets load as CSS background images,
+  deliberately NOT through a canvas: canvas pixel readback from file:// is
+  blocked by CORS, and a harness that needs a web server is a harness nobody
+  runs.
+
+  8-direction animation cannot be judged from a static contact sheet. A walk
+  cycle either has weight or slides, and one broken facing out of eight is
+  invisible until you see them side by side, moving, at the size they ship at.
+
+  The tables below mirror src/assets/sprites/index.ts. If DIR_ANIMATIONS or the
+  breed list changes, update them here too.
+-->
+<style>
+  :root {
+    --cream: #FAF6F0;
+    --ink: #2C2A29;
+    --muted: #706B67;
+    --ginger: #FF8E53;
+    --border: rgba(234, 227, 218, 0.9);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: var(--cream);
+    color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;
+    padding: 14px 16px; margin-bottom: 24px;
+    background: #fff; border: 1px solid var(--border); border-radius: 14px;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  select, input[type=range] { font: inherit; }
+  select {
+    padding: 6px 8px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--cream); color: var(--ink);
+  }
+  .seg { display: flex; gap: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    font: inherit; padding: 6px 14px; border: 0; cursor: pointer;
+    background: var(--cream); color: var(--muted);
+  }
+  .seg button[aria-pressed="true"] { background: var(--ginger); color: #fff; font-weight: 700; }
+
+  /* Sprites must never be smoothed — every renderer, prefixed and standard. */
+  .sprite {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    image-rendering: -moz-crisp-edges;
+    background-repeat: no-repeat;
+  }
+
+  .grid { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 28px; }
+  .cell {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px; text-align: center;
+  }
+  .cell .dir { font-size: 11px; font-weight: 700; color: var(--muted); margin-top: 6px; }
+  .cell.mirrored .dir::after { content: ' ⇋'; color: var(--ginger); }
+
+  .row { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 16px;
+  }
+  .panel h2 { font-size: 13px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .strip { display: flex; gap: 6px; align-items: flex-end; }
+  .strip .f { text-align: center; }
+  .strip .n { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .strip .f.active .n { color: var(--ginger); font-weight: 700; }
+  .note { font-size: 11px; color: var(--muted); margin-top: 10px; max-width: 460px; }
+</style>
+
+<h1>SnapaCat sprite preview</h1>
+<div class="sub">
+  8 directions · <span id="animName">idle</span> ·
+  <span id="sizeLabel"></span> — roughly the size cats render at in the Hood
+</div>
+
+<div class="controls">
+  <div class="field">
+    <label for="breed">Breed</label>
+    <select id="breed"></select>
+  </div>
+  <div class="field">
+    <label>Animation</label>
+    <div class="seg" id="anim"></div>
+  </div>
+  <div class="field">
+    <label for="zoom">Zoom <span id="zoomVal"></span></label>
+    <input type="range" id="zoom" min="1" max="8" step="1" value="3">
+  </div>
+  <div class="field">
+    <label for="speed">Speed <span id="speedVal"></span></label>
+    <input type="range" id="speed" min="25" max="200" step="25" value="100">
+  </div>
+  <div class="field">
+    <label>&nbsp;</label>
+    <div class="seg"><button id="playBtn" aria-pressed="true">Pause</button></div>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="row">
+  <div class="panel">
+    <h2>Frame strip — <span id="stripDir">S</span></h2>
+    <div class="strip" id="strip"></div>
+    <div class="note">
+      Every authored frame for this direction, in sheet order. Frames 0–2 idle,
+      3–6 walk, 7–9 sleep. The highlighted one is playing. Read a walk cycle here
+      frame by frame — contact, passing, contact, passing — the way a lightbox
+      would show it.
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Mirrors src/assets/sprites/index.ts ──────────────────────────────────────
+const DIRECTIONS = ['S', 'SE', 'E', 'NE', 'N', 'NW', 'W', 'SW'];
+/** SW/W/NW are horizontal mirrors of SE/E/NE — flagged so mirroring artefacts
+ *  are attributable rather than mysterious. */
+const MIRRORED = new Set(['NW', 'W', 'SW']);
+
+const ANIMATIONS = {
+  idle:  { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
+  walk:  { frames: [3, 4, 5, 6], durations: [180, 140, 180, 140] },
+  sleep: { frames: [7, 8, 9, 8], durations: [1400, 220, 700, 220] },
+};
+
+const BREEDS = [
+  'brown_mackerel_tabby', 'brown_classic_tabby', 'grey_mackerel_tabby',
+  'orange_mackerel_tabby', 'brown_tabby_white', 'grey_tabby_white',
+  'orange_tabby_white', 'solid_black', 'solid_grey', 'solid_white',
+  'black_tuxedo', 'grey_tuxedo', 'cow_cat', 'tortoiseshell', 'calico',
+  'dilute_calico', 'torbie', 'seal_point', 'lynx_point', 'black_smoke',
+];
+
+const SRC_FRAME = 32;    // authored pixels
+const SHEET_FRAME = 128; // shipped, pre-scaled 4x
+const COLS = 10;
+const SHEET_W = COLS * SHEET_FRAME;
+const SHEET_H = DIRECTIONS.length * SHEET_FRAME;
+
+// ── State ────────────────────────────────────────────────────────────────────
+let breed = BREEDS[0];
+let animName = 'idle';
+let zoom = 3;          // multiples of the 32px source
+let speedPct = 100;
+let playing = true;
+let step = 0;
+let timer = null;
+
+const $ = (id) => document.getElementById(id);
+const sheetURL = (b) => `../../src/assets/sprites/${b}_dir.png`;
+
+/** Positions a sheet-backed element on one frame. Zoom is applied to the SOURCE
+ *  size, so 1x is the true authored 32px and everything above is a whole
+ *  multiple — fractional scales would reintroduce the blur pixelated avoids. */
+function place(el, dirIndex, frame) {
+  const px = SRC_FRAME * zoom;
+  const scale = px / SHEET_FRAME;
+  el.style.width = px + 'px';
+  el.style.height = px + 'px';
+  el.style.backgroundImage = `url("${sheetURL(breed)}")`;
+  el.style.backgroundSize = `${SHEET_W * scale}px ${SHEET_H * scale}px`;
+  el.style.backgroundPosition = `-${frame * px}px -${dirIndex * px}px`;
+}
+
+// ── Build the 8-direction grid ───────────────────────────────────────────────
+const cells = DIRECTIONS.map((dir, i) => {
+  const cell = document.createElement('div');
+  cell.className = 'cell' + (MIRRORED.has(dir) ? ' mirrored' : '');
+  const sprite = document.createElement('div');
+  sprite.className = 'sprite';
+  const label = document.createElement('div');
+  label.className = 'dir';
+  label.textContent = dir;
+  cell.append(sprite, label);
+  $('grid').append(cell);
+  return { sprite, dirIndex: i };
+});
+
+// ── Frame strip for direction S ──────────────────────────────────────────────
+const stripFrames = Array.from({ length: COLS }, (_, f) => {
+  const wrap = document.createElement('div');
+  wrap.className = 'f';
+  const sprite = document.createElement('div');
+  sprite.className = 'sprite';
+  const n = document.createElement('div');
+  n.className = 'n';
+  n.textContent = f;
+  wrap.append(sprite, n);
+  $('strip').append(wrap);
+  return { wrap, sprite, frame: f };
+});
+
+// ── Controls ─────────────────────────────────────────────────────────────────
+BREEDS.forEach((b) => {
+  const o = document.createElement('option');
+  o.value = b;
+  o.textContent = b.replace(/_/g, ' ');
+  $('breed').append(o);
+});
+$('breed').onchange = (e) => { breed = e.target.value; render(); };
+
+Object.keys(ANIMATIONS).forEach((name) => {
+  const b = document.createElement('button');
+  b.textContent = name;
+  b.onclick = () => { animName = name; step = 0; restart(); };
+  b.dataset.anim = name;
+  $('anim').append(b);
+});
+
+$('zoom').oninput = (e) => { zoom = +e.target.value; render(); };
+$('speed').oninput = (e) => { speedPct = +e.target.value; };
+$('playBtn').onclick = () => {
+  playing = !playing;
+  $('playBtn').textContent = playing ? 'Pause' : 'Play';
+  $('playBtn').setAttribute('aria-pressed', String(playing));
+  if (playing) tick(); else clearTimeout(timer);
+};
+
+// ── Render + loop ────────────────────────────────────────────────────────────
+function render() {
+  const anim = ANIMATIONS[animName];
+  const frame = anim.frames[step % anim.frames.length];
+
+  cells.forEach(({ sprite, dirIndex }) => place(sprite, dirIndex, frame));
+  stripFrames.forEach(({ wrap, sprite, frame: f }) => {
+    place(sprite, 0, f);
+    wrap.classList.toggle('active', f === frame);
+  });
+
+  $('animName').textContent = animName;
+  $('zoomVal').textContent = `${zoom}× (${SRC_FRAME * zoom}px)`;
+  $('speedVal').textContent = `${speedPct}%`;
+  $('sizeLabel').textContent = `${SRC_FRAME * zoom}px`;
+  [...$('anim').children].forEach((b) =>
+    b.setAttribute('aria-pressed', String(b.dataset.anim === animName)));
+}
+
+function tick() {
+  clearTimeout(timer);
+  render();
+  if (!playing) return;
+  const anim = ANIMATIONS[animName];
+  const hold = anim.durations[step % anim.durations.length] ?? 400;
+  // Lower percentage = slower, so scrubbing down lets you inspect a fast walk.
+  timer = setTimeout(() => { step++; tick(); }, hold * (100 / speedPct));
+}
+
+tick();
+</script>
