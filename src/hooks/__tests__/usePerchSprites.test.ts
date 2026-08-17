@@ -170,8 +170,30 @@ describe('loadPerchIds', () => {
     release([cat('calico')]);
     await inFlight;
 
+    // Base mock behind the mockReturnValueOnce: without it a regression here
+    // fails with "cats.map is not a function" rather than the count assertion.
+    mockGetCats.mockResolvedValue([cat('calico')]);
     await loadPerchIds('u1');
     expect(mockGetCats).toHaveBeenCalledTimes(1); // u1's result was cached
+  });
+
+  it('shares one round trip between concurrent reads of the same uid', async () => {
+    // Two reads capture the same stamp, so the guard cannot tell them apart and
+    // the later resolution wins even when it carries the older snapshot.
+    mockGetCats.mockResolvedValue([cat('calico')]);
+    const [a, b] = await Promise.all([loadPerchIds('u1'), loadPerchIds('u1')]);
+    expect(mockGetCats).toHaveBeenCalledTimes(1);
+    expect(a).toEqual(b);
+  });
+
+  it('does not wedge on a shared fetch that rejected', async () => {
+    // The in-flight entry must clear on rejection, or one offline read poisons
+    // every later read with the same rejected promise.
+    mockGetCats.mockRejectedValueOnce(new Error('offline'));
+    await expect(loadPerchIds('u1')).rejects.toThrow('offline');
+
+    mockGetCats.mockResolvedValue([cat('calico')]);
+    expect(await loadPerchIds('u1')).toEqual(['calico']);
   });
 
   it('revalidates once the TTL has expired', async () => {

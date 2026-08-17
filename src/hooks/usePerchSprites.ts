@@ -10,7 +10,13 @@ import { getCats } from '../services/dbService';
 import { MAX_HOOD_CATS } from '../utils/spawnCalculator';
 
 interface CacheEntry {
-  ids: string[];
+  /**
+   * Readonly so a caller cannot mutate what is still in the cache. This was a
+   * convention held by two unrelated call sites and no test; making it a type
+   * removes the need for defensive copies, which cost a render each by breaking
+   * reference identity on the warm path.
+   */
+  ids: readonly string[];
   at: number;
 }
 
@@ -28,6 +34,9 @@ interface CacheEntry {
  */
 const cache = new Map<string, CacheEntry>();
 
+/** In-flight reads, so two mounts of one uid share a round trip. */
+const inFlight = new Map<string, Promise<readonly string[]>>();
+
 const TTL_MS = 5 * 60_000;
 
 /**
@@ -39,9 +48,9 @@ const TTL_MS = 5 * 60_000;
  * starts) → log a cat → fetch resolves" writes the pre-cat list back with a
  * fresh timestamp, pinning the stale list for a full TTL.
  *
- * Per-uid rather than a single global counter: a global one meant invalidating
- * a friend's entry also discarded an unrelated in-flight fetch for your own,
- * leaving your cache cold for no reason. clear-all needs its own counter
+ * Per-uid rather than one global counter: a global counter meant invalidating a
+ * friend's entry also discarded an unrelated in-flight fetch for your own,
+ * leaving that cache cold for no reason. clear-all needs its own counter
  * because it must void uids that have no generation entry yet.
  */
 const generation = new Map<string, number>();
@@ -53,8 +62,20 @@ const bump = (uid: string): void => {
   generation.set(uid, (generation.get(uid) ?? 0) + 1);
 };
 
-/** Drops cached perches so the next read refetches. */
-export function invalidatePerchSprites(uid?: string): void {
+/**
+ * The ONLY writer into `cache`.
+ *
+ * Three consecutive rounds of review found the same bug: a new write path
+ * reached the cache without recording a generation, and each one had to
+ * remember the contract independently. Funnelling every write through here
+ * makes "grep for cache.set, expect one hit" a checkable invariant.
+ */
+function writeCache(uid: string, ids: readonly string[], at: number): void {
+  cache.set(uid, { ids, at });
+}
+
+/** The only remover. Drops entries and records the generation change. */
+function dropCache(uid?: string): void {
   if (uid) {
     cache.delete(uid);
     bump(uid);
@@ -64,14 +85,22 @@ export function invalidatePerchSprites(uid?: string): void {
   }
 }
 
+/** Drops cached perches so the next read refetches. */
+export function invalidatePerchSprites(uid?: string): void {
+  dropCache(uid);
+}
+
 /**
  * Folds a just-created cat into the cached list.
  *
  * Preferred over invalidating when the sprite id is already known: dropping the
  * entry guarantees a cold fetch on the *next* Hood entry, which is the one the
- * user is most likely to make immediately after logging a cat. `at` is
- * preserved so the entry still revalidates on its original schedule; this is a
- * local fast-path, not a claim of authority.
+ * user is most likely to make immediately after logging a cat.
+ *
+ * `at` is preserved, so priming a stale entry yields a stale entry — the user
+ * sees the new cat immediately, but a revalidation still happens in the
+ * background. Since the user has usually been in the camera flow for minutes,
+ * that is the common case rather than the exception.
  */
 export function primePerchSprites(uid: string, spriteId: string): void {
   const hit = cache.get(uid);
@@ -80,11 +109,11 @@ export function primePerchSprites(uid: string, spriteId: string): void {
   // we prime nor — when there is nothing to prime — land as though current.
   bump(uid);
   if (!hit) return;
-  cache.set(uid, { ids: [...hit.ids, spriteId], at: hit.at });
+  writeCache(uid, [...hit.ids, spriteId], hit.at);
 }
 
 /** Exported for testing. */
-export function isFresh(entry: CacheEntry | undefined, now = Date.now()): boolean {
+export function isFresh(entry: CacheEntry | undefined, now = Date.now()): entry is CacheEntry {
   return entry !== undefined && now - entry.at < TTL_MS;
 }
 
@@ -99,7 +128,10 @@ export function isFresh(entry: CacheEntry | undefined, now = Date.now()): boolea
  *
  * Exported for testing.
  */
-export function buildPerchSprites(ids: string[], slots = MAX_HOOD_CATS): string[] {
+export function buildPerchSprites(
+  ids: readonly string[],
+  slots = MAX_HOOD_CATS,
+): string[] {
   if (ids.length === 0) return [];
   const recent = ids.slice(-slots).reverse();
   return Array.from({ length: slots }, (_, i) => recent[i % recent.length]!);
@@ -111,33 +143,52 @@ export function buildPerchSprites(ids: string[], slots = MAX_HOOD_CATS): string[
  * Serves a fresh entry without touching the network; otherwise fetches and
  * caches, unless the uid's generation moved while the fetch was in flight.
  */
-export async function loadPerchIds(uid: string): Promise<string[]> {
+export async function loadPerchIds(uid: string): Promise<readonly string[]> {
   const hit = cache.get(uid);
-  // Copy so callers — including React state — can never alias the cached array.
-  if (isFresh(hit)) return [...hit!.ids];
+  if (isFresh(hit)) return hit.ids;
+
+  // Join an existing round trip rather than racing it. Two concurrent reads of
+  // one uid capture the same stamp, so the guard cannot tell them apart and the
+  // later resolution wins even when it carries the older snapshot.
+  const pending = inFlight.get(uid);
+  if (pending) return pending;
 
   const issuedAt = stampOf(uid);
-  /**
-   * Assumes getCats returns oldest-first: mock mode preserves insertion order,
-   * and Firestore's default document-id order is chronological given cat ids
-   * are `cat_${Date.now()}_${rand}`.
-   *
-   * This is load-bearing only on the cold-fetch fallback — process restart, TTL
-   * expiry, or a prime that found no entry. Immediately after logging a cat,
-   * primePerchSprites appends explicitly, so the newest cat reaching perch 0
-   * does not depend on this. A `created_at` field on Cat would make it explicit.
-   */
-  const cats = await getCats(uid);
-  const next = cats.map((c) => c.sprite_template_id).filter(Boolean);
+  const run = (async () => {
+    /**
+     * Assumes getCats returns oldest-first: mock mode preserves insertion
+     * order, and Firestore's default document-id order is chronological given
+     * cat ids are `cat_${Date.now()}_${rand}`.
+     *
+     * Load-bearing only on the cold-fetch fallback — restart, TTL expiry, or a
+     * prime that found no entry. Immediately after logging a cat,
+     * primePerchSprites appends explicitly, so the newest cat reaching perch 0
+     * does not depend on it. A `created_at` field on Cat would make it explicit,
+     * but that amends the schema CLAUDE.md declares as source of truth.
+     */
+    const cats = await getCats(uid);
+    const next = cats.map((c) => c.sprite_template_id).filter(Boolean);
 
-  if (next.length !== cats.length) {
-    console.warn(
-      `[perches] ${cats.length - next.length} of ${uid}'s cats have no sprite_template_id and were skipped.`,
-    );
+    if (next.length !== cats.length) {
+      // Deliberately no uid: this ships to release (no transform-remove-console
+      // in the babel config) and on a friend's Hood the uid identifies them.
+      console.warn(
+        `[perches] ${cats.length - next.length} cat(s) skipped: no sprite_template_id.`,
+      );
+    }
+
+    if (stampOf(uid) === issuedAt) writeCache(uid, next, Date.now());
+    return next;
+  })();
+
+  inFlight.set(uid, run);
+  try {
+    return await run;
+  } finally {
+    // Must clear on rejection too, or one offline read poisons every subsequent
+    // read with the same rejected promise.
+    inFlight.delete(uid);
   }
-
-  if (stampOf(uid) === issuedAt) cache.set(uid, { ids: next, at: Date.now() });
-  return next;
 }
 
 export interface PerchSprites {
@@ -149,7 +200,9 @@ export interface PerchSprites {
 
 export function usePerchSprites(uid: string): PerchSprites {
   // null means "not resolved yet" and is distinct from [] ("no cats").
-  const [ids, setIds] = useState<string[] | null>(() => cache.get(uid)?.ids ?? null);
+  const [ids, setIds] = useState<readonly string[] | null>(
+    () => cache.get(uid)?.ids ?? null,
+  );
 
   useEffect(() => {
     let alive = true;
