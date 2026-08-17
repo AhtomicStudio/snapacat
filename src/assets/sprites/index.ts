@@ -74,3 +74,61 @@ export function getSpriteSheet(spriteId: string): ImageSourcePropType {
   }
   return sheet;
 }
+
+// ---------------------------------------------------------------------------
+// 8-direction sheets
+// ---------------------------------------------------------------------------
+
+/** 8 compass directions, in the order they appear as rows in *_dir.png sheets. */
+export const DIRECTIONS = ['S', 'SE', 'E', 'NE', 'N', 'NW', 'W', 'SW'] as const;
+export type SpriteDirection = (typeof DIRECTIONS)[number];
+
+/** Number of frame columns per direction row in directional sheets. */
+export const DIR_FRAME_COUNT = 10;
+
+/**
+ * Directional animations. Frame indices reference columns in the direction
+ * row, matching the sheet layout.
+ */
+export const DIR_ANIMATIONS: Record<'idle' | 'walk' | 'sleep', SpriteAnimation> = {
+  idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
+  walk: { frames: [3, 4, 5, 6], durations: [180, 140, 180, 140] },
+  sleep: { frames: [7, 8, 9, 8], durations: [1400, 220, 700, 220] },
+};
+
+export const SPRITE_SHEETS_DIR: Record<string, ImageSourcePropType> = {
+  brown_mackerel_tabby: require('./brown_mackerel_tabby_dir.png'),
+  brown_classic_tabby: require('./brown_classic_tabby_dir.png'),
+  grey_mackerel_tabby: require('./grey_mackerel_tabby_dir.png'),
+  orange_mackerel_tabby: require('./orange_mackerel_tabby_dir.png'),
+  brown_tabby_white: require('./brown_tabby_white_dir.png'),
+  grey_tabby_white: require('./grey_tabby_white_dir.png'),
+  orange_tabby_white: require('./orange_tabby_white_dir.png'),
+  solid_black: require('./solid_black_dir.png'),
+  solid_grey: require('./solid_grey_dir.png'),
+  solid_white: require('./solid_white_dir.png'),
+  black_tuxedo: require('./black_tuxedo_dir.png'),
+  grey_tuxedo: require('./grey_tuxedo_dir.png'),
+  cow_cat: require('./cow_cat_dir.png'),
+  tortoiseshell: require('./tortoiseshell_dir.png'),
+  calico: require('./calico_dir.png'),
+  dilute_calico: require('./dilute_calico_dir.png'),
+  torbie: require('./torbie_dir.png'),
+  seal_point: require('./seal_point_dir.png'),
+  lynx_point: require('./lynx_point_dir.png'),
+  black_smoke: require('./black_smoke_dir.png'),
+};
+
+/**
+ * Returns the directional sheet for a sprite id, with fallback.
+ */
+export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
+  const sheet = SPRITE_SHEETS_DIR[spriteId];
+  if (!sheet) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[sprites] Unknown sprite id "${spriteId}" for dir sheet — falling back to brown_mackerel_tabby.`);
+    }
+    return SPRITE_SHEETS_DIR['brown_mackerel_tabby']!;
+  }
+  return sheet;
+}

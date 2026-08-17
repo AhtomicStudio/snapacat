@@ -37,7 +37,7 @@ const DRAW_ORDER = {
   S: ['tail', 'legBL', 'legBR', 'body', 'legFL', 'legFR', 'head'],
   SE: ['tail', 'legBL', 'legBR', 'body', 'legFL', 'legFR', 'head'],
   E: ['legFL', 'legBL', 'tail', 'body', 'legBR', 'legFR', 'head'],
-  NE: ['head', 'legFL', 'legBL', 'body', 'legBR', 'legFR', 'tail'],
+  NE: ['head', 'legFL', 'legFR', 'body', 'legBR', 'legBL', 'tail'],
   N: ['head', 'legFL', 'legFR', 'body', 'legBL', 'legBR', 'tail'],
 };
 
@@ -69,4 +69,110 @@ function facingFor(dx, dy) {
   return best;
 }
 
-module.exports = { AUTHORED, ALL, RESOLVE, DRAW_ORDER, VECTOR, facingFor };
+// ---------------------------------------------------------------------------
+// Part-based composition tables — used by compositor.js
+// ---------------------------------------------------------------------------
+
+/**
+ * Root position in the 32×32 frame for each authored direction.
+ * This is the "ground contact centre" — the bottom-centre of the standing cat.
+ * All part anchors are relative to this point.
+ */
+const ROOTS = {
+  S:  { x: 15, y: 30 },
+  SE: { x: 15, y: 30 },
+  E:  { x: 15, y: 30 },
+  NE: { x: 15, y: 30 },
+  N:  { x: 15, y: 30 },
+};
+
+/**
+ * Where each part connects, relative to the root, per direction.
+ * [dx, dy] — positive x is rightward, positive y is downward.
+ *
+ * These are STRUCTURAL connections that depend on how the cat's body is
+ * oriented in 3D. Animation offsets are applied ON TOP of these (see
+ * animations.js).
+ *
+ * Leg names are from the CAT's perspective:
+ *   FL = front-left, FR = front-right, BL = back-left, BR = back-right.
+ * For E-facing, front legs are on the right side of the frame and back legs
+ * are on the left. FL is the far front leg, FR is the near front leg.
+ */
+const ANCHORS = {
+  S: {
+    body:  [0, 0],
+    head:  [0, -12],
+    tail:  [7, -3],
+    legFL: [-4, 0],
+    legFR: [4, 0],
+    legBL: [-4, 0],
+    legBR: [4, 0],
+  },
+  SE: {
+    body:  [0, 0],
+    head:  [2, -12],
+    tail:  [5, -4],
+    legFL: [-2, 0],
+    legFR: [5, 0],
+    legBL: [-4, 0],
+    legBR: [3, 0],
+  },
+  E: {
+    body:  [0, 0],
+    head:  [5, -11],
+    tail:  [-7, -4],
+    legFL: [3, 0],
+    legFR: [4, 0],
+    legBL: [-4, 0],
+    legBR: [-3, 0],
+  },
+  NE: {
+    body:  [0, 0],
+    head:  [2, -12],
+    tail:  [-5, -4],
+    legFL: [5, 0],
+    legFR: [-2, 0],
+    legBL: [3, 0],
+    legBR: [-4, 0],
+  },
+  N: {
+    body:  [0, 0],
+    head:  [0, -12],
+    tail:  [7, -3],
+    legFL: [4, 0],
+    legFR: [-4, 0],
+    legBL: [4, 0],
+    legBR: [-4, 0],
+  },
+};
+
+/**
+ * Ground-contact shadow ellipse, per direction.
+ * The shadow is cosmetic and composited under the sprite (not in the slot
+ * buffer), same as the existing rig.
+ */
+const SHADOWS = {
+  S:  { cx: 15.5, cy: 31, rx: 8,  ry: 1.4 },
+  SE: { cx: 15.5, cy: 31, rx: 8,  ry: 1.4 },
+  E:  { cx: 15.5, cy: 31, rx: 9,  ry: 1.4 },
+  NE: { cx: 15.5, cy: 31, rx: 8,  ry: 1.4 },
+  N:  { cx: 15.5, cy: 31, rx: 8,  ry: 1.4 },
+};
+
+/**
+ * Whisker pixel offsets, relative to the head's anchor position in frame space.
+ * Mirrored directions negate dx automatically.
+ */
+const WHISKER_OFFSETS = {
+  S:  [[-7, -2], [-8, -2], [8, -2], [9, -2]],
+  SE: [[7, -2], [8, -3]],
+  E:  [[8, -5], [9, -6]],
+  NE: [],
+  N:  [],
+};
+
+module.exports = {
+  AUTHORED, ALL, RESOLVE, DRAW_ORDER, VECTOR, facingFor,
+  ROOTS, ANCHORS, SHADOWS, WHISKER_OFFSETS,
+};

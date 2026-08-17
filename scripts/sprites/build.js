@@ -363,6 +363,259 @@ function writeAnimStrip(breed, frames) {
 }
 
 // ---------------------------------------------------------------------------
+// Directional (8-way part-based) sheets
+// ---------------------------------------------------------------------------
+
+const { renderFrame, buildPartAtlas } = require('./compositor');
+const { ALL: ALL_DIRS } = require('./directions');
+const { DIR_ANIMATIONS, ANIM_ORDER, sheetLayout } = require('./animations');
+
+/**
+ * Renders all directional frames for one breed and packs them into a sheet.
+ * Layout: rows = directions (S,SE,E,NE,N,NW,W,SW), cols = animation frames
+ * packed sequentially (idle frames, walk frames, sleep frames).
+ */
+function buildDirSheet(breed, atlas) {
+  const { layout, totalCols } = sheetLayout();
+  const width = FRAME_SIZE * totalCols;
+  const height = FRAME_SIZE * ALL_DIRS.length;
+  const rgba = Buffer.alloc(width * height * 4);
+  const palette = resolvePalette(breed);
+  const allShadows = [];
+
+  for (let row = 0; row < ALL_DIRS.length; row++) {
+    const dir = ALL_DIRS[row];
+    const rowShadows = [];
+
+    for (const animName of ANIM_ORDER) {
+      const anim = DIR_ANIMATIONS[animName];
+      const { startCol } = layout[animName];
+
+      for (let f = 0; f < anim.frames.length; f++) {
+        const { buf, whiskers, shadow } = renderFrame(dir, animName, f, atlas, breed);
+        const finished = finishFrame(buf.slice(), whiskers);
+
+        // Write frame into sheet
+        const offsetX = (startCol + f) * FRAME_SIZE;
+        const offsetY = row * FRAME_SIZE;
+
+        // Shadow first (under sprite)
+        const shadowHex = palette[SLOT.SHADOW];
+        if (shadow && shadowHex) {
+          const { r, g, b } = hexToRgb(shadowHex);
+          const alpha = Math.round(255 * (SLOT_ALPHA[SLOT.SHADOW] ?? 0.2));
+          for (let y = Math.floor(shadow.cy - shadow.ry); y <= Math.ceil(shadow.cy + shadow.ry); y++) {
+            for (let x = Math.floor(shadow.cx - shadow.rx); x <= Math.ceil(shadow.cx + shadow.rx); x++) {
+              if (x < 0 || y < 0 || x >= FRAME_SIZE || y >= FRAME_SIZE) continue;
+              const dx = (x - shadow.cx) / shadow.rx;
+              const dy = (y - shadow.cy) / shadow.ry;
+              if (dx * dx + dy * dy > 1) continue;
+              const di = ((offsetY + y) * width + (offsetX + x)) * 4;
+              rgba[di] = r; rgba[di + 1] = g; rgba[di + 2] = b; rgba[di + 3] = alpha;
+            }
+          }
+        }
+
+        // Sprite pixels
+        for (let y = 0; y < FRAME_SIZE; y++) {
+          for (let x = 0; x < FRAME_SIZE; x++) {
+            const slot = finished[y * FRAME_SIZE + x];
+            if (slot === SLOT.EMPTY) continue;
+            const hex = palette[slot];
+            if (!hex) continue;
+            const { r, g, b } = hexToRgb(hex);
+            const di = ((offsetY + y) * width + (offsetX + x)) * 4;
+            rgba[di] = r; rgba[di + 1] = g; rgba[di + 2] = b;
+            rgba[di + 3] = Math.round(255 * (SLOT_ALPHA[slot] ?? 1));
+          }
+        }
+      }
+    }
+  }
+
+  return { rgba, width, height, totalCols };
+}
+
+/**
+ * Contact sheet showing all 8 directions of one breed, for visual QA.
+ */
+function writeDirContactSheet(breed, atlas) {
+  const { layout, totalCols } = sheetLayout();
+  const scale = 4;
+  const cell = FRAME_SIZE * scale;
+  const COLS = 8;
+  const W = COLS * cell;
+  const H = cell;
+  const out = Buffer.alloc(W * H * 4);
+  const BG = [hexToRgb('#FAF6F0'), hexToRgb('#E8DFD2')];
+  const palette = resolvePalette(breed);
+
+  for (let i = 0; i < ALL_DIRS.length; i++) {
+    const dir = ALL_DIRS[i];
+    const { buf, whiskers, shadow } = renderFrame(dir, 'idle', 0, atlas, breed);
+    const finished = finishFrame(buf.slice(), whiskers);
+
+    // Compose single frame into RGBA
+    const frgba = Buffer.alloc(FRAME_SIZE * FRAME_SIZE * 4);
+    for (let y = 0; y < FRAME_SIZE; y++) {
+      for (let x = 0; x < FRAME_SIZE; x++) {
+        const slot = finished[y * FRAME_SIZE + x];
+        if (slot === SLOT.EMPTY) continue;
+        const hex = palette[slot];
+        if (!hex) continue;
+        const { r, g, b } = hexToRgb(hex);
+        const di = (y * FRAME_SIZE + x) * 4;
+        frgba[di] = r; frgba[di + 1] = g; frgba[di + 2] = b;
+        frgba[di + 3] = Math.round(255 * (SLOT_ALPHA[slot] ?? 1));
+      }
+    }
+    const scaled = upscaleRGBA(frgba, FRAME_SIZE, FRAME_SIZE, scale);
+
+    const col = i;
+    const bg = BG[col % 2];
+    const ox = col * cell;
+
+    for (let y = 0; y < cell; y++) {
+      for (let x = 0; x < cell; x++) {
+        const si = (y * cell + x) * 4;
+        const di = (y * W + ox + x) * 4;
+        const a = scaled[si + 3] / 255;
+        out[di] = scaled[si] * a + bg.r * (1 - a);
+        out[di + 1] = scaled[si + 1] * a + bg.g * (1 - a);
+        out[di + 2] = scaled[si + 2] * a + bg.b * (1 - a);
+        out[di + 3] = 255;
+      }
+    }
+  }
+
+  fs.writeFileSync(path.join(TEMPLATE_DIR, 'contact_dir.png'), encodePNG(W, H, out));
+}
+
+/**
+ * Extended manifest with directional sheet data.
+ */
+function writeDirManifest(breeds, frameCount, totalDirCols) {
+  const entries = breeds.map((b) => `  ${b.id}: require('./${b.id}.png'),`).join('\n');
+  const dirEntries = breeds.map((b) => `  ${b.id}: require('./${b.id}_dir.png'),`).join('\n');
+
+  const anims = Object.entries(ANIMATIONS)
+    .map(
+      ([name, a]) =>
+        `  ${name}: { frames: [${a.frames.join(', ')}], durations: [${a.durations.join(', ')}] },`,
+    )
+    .join('\n');
+
+  const { layout } = sheetLayout();
+  const dirAnims = ANIM_ORDER
+    .map((name) => {
+      const anim = DIR_ANIMATIONS[name];
+      const l = layout[name];
+      const frameIndices = anim.sequence.map((s) => l.startCol + s);
+      return `  ${name}: { frames: [${frameIndices.join(', ')}], durations: [${anim.durations.join(', ')}] },`;
+    })
+    .join('\n');
+
+  const dirNames = ALL_DIRS.map((d) => `'${d}'`).join(', ');
+
+  const contents = `/**
+ * AUTO-GENERATED by scripts/sprites/build.js — do not edit by hand.
+ * Run \`npm run sprites\` to regenerate.
+ *
+ * Metro requires static require() calls, so the sheet map has to be written
+ * out literally rather than resolved at runtime.
+ */
+import type { ImageSourcePropType } from 'react-native';
+
+/** Size of one frame in the shipped (pre-scaled) sheet, in pixels. */
+export const FRAME_SIZE = ${FRAME_SIZE * DISPLAY_SCALE};
+
+/** Size of one frame in the authoring template, in pixels. */
+export const SOURCE_FRAME_SIZE = ${FRAME_SIZE};
+
+/** Number of frames per sheet, laid out left-to-right. */
+export const FRAME_COUNT = ${frameCount};
+
+export interface SpriteAnimation {
+  /**
+   * Sheet frame indices to play in order, looping. Referencing frames by index
+   * lets a rest-mid-peak-mid cycle reuse the mid pose instead of shipping a
+   * duplicate frame.
+   */
+  frames: number[];
+  /** Per-frame hold time in ms, parallel to \`frames\`. Asymmetric timings carry the ease. */
+  durations: number[];
+}
+
+export const ANIMATIONS: Record<'idle' | 'sleep', SpriteAnimation> = {
+${anims}
+};
+
+export const SPRITE_SHEETS: Record<string, ImageSourcePropType> = {
+${entries}
+};
+
+/**
+ * Returns the sheet for a sprite id, falling back to the first breed.
+ *
+ * The fallback is deliberate — a renamed breed or a legacy Firestore document
+ * should still render a cat — but it is silent, which turns "every cat is a
+ * brown tabby" into a mystery. Warn in development.
+ */
+export function getSpriteSheet(spriteId: string): ImageSourcePropType {
+  const sheet = SPRITE_SHEETS[spriteId];
+  if (!sheet) {
+    // typeof guard: __DEV__ is a React Native global, and this module is also
+    // loaded by the Jest suite, which runs in a plain node environment.
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(\`[sprites] Unknown sprite id "\${spriteId}" — falling back to ${breeds[0].id}.\`);
+    }
+    return SPRITE_SHEETS['${breeds[0].id}']!;
+  }
+  return sheet;
+}
+
+// ---------------------------------------------------------------------------
+// 8-direction sheets
+// ---------------------------------------------------------------------------
+
+/** 8 compass directions, in the order they appear as rows in *_dir.png sheets. */
+export const DIRECTIONS = [${dirNames}] as const;
+export type SpriteDirection = (typeof DIRECTIONS)[number];
+
+/** Number of frame columns per direction row in directional sheets. */
+export const DIR_FRAME_COUNT = ${totalDirCols};
+
+/**
+ * Directional animations. Frame indices reference columns in the direction
+ * row, matching the sheet layout.
+ */
+export const DIR_ANIMATIONS: Record<'idle' | 'walk' | 'sleep', SpriteAnimation> = {
+${dirAnims}
+};
+
+export const SPRITE_SHEETS_DIR: Record<string, ImageSourcePropType> = {
+${dirEntries}
+};
+
+/**
+ * Returns the directional sheet for a sprite id, with fallback.
+ */
+export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
+  const sheet = SPRITE_SHEETS_DIR[spriteId];
+  if (!sheet) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(\`[sprites] Unknown sprite id "\${spriteId}" for dir sheet — falling back to ${breeds[0].id}.\`);
+    }
+    return SPRITE_SHEETS_DIR['${breeds[0].id}']!;
+  }
+  return sheet;
+}
+`;
+
+  fs.writeFileSync(path.join(OUT_DIR, 'index.ts'), contents);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -372,6 +625,7 @@ function main() {
 
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
+  // ── Existing whole-frame sheets (MUST be byte-identical) ───────────
   for (const breed of breeds) {
     const rendered = renderBreed(frames, breed);
     const palette = resolvePalette(breed);
@@ -380,16 +634,34 @@ function main() {
     writeSheet(path.join(OUT_DIR, `${breed.id}.png`), rgba, width, height, DISPLAY_SCALE);
   }
 
-  writeManifest(breeds, frames.length);
+  // ── Directional sheets (new, additive) ─────────────────────────────
+  const atlas = buildPartAtlas();
+  let totalDirCols = 0;
+
+  for (const breed of breeds) {
+    const { rgba, width, height, totalCols } = buildDirSheet(breed, atlas);
+    totalDirCols = totalCols;
+    // No margin assertion for directional sheets yet — parts are smaller
+    // and margins are generous, but we validate empirically.
+    writeSheet(path.join(OUT_DIR, `${breed.id}_dir.png`), rgba, width, height, DISPLAY_SCALE);
+  }
+
+  writeDirManifest(breeds, frames.length, totalDirCols);
   writeTemplate(frames);
   writeContactSheet(breeds, frames);
   writeAnimStrip(breeds[0], frames);
+  writeDirContactSheet(breeds[0], atlas);
 
   const sheetPx = `${FRAME_SIZE * frames.length * DISPLAY_SCALE}x${FRAME_SIZE * DISPLAY_SCALE}`;
+  const { totalCols } = sheetLayout();
+  const dirPx = `${FRAME_SIZE * totalCols * DISPLAY_SCALE}x${FRAME_SIZE * ALL_DIRS.length * DISPLAY_SCALE}`;
   console.log(`✓ ${breeds.length} sprite sheets  (${frames.length} frames, ${sheetPx})`);
   console.log(`  → src/assets/sprites/`);
-  console.log(`✓ template, palette, contact sheet, anim strip`);
+  console.log(`✓ ${breeds.length} directional sheets  (${totalCols}×${ALL_DIRS.length} frames, ${dirPx})`);
+  console.log(`  → src/assets/sprites/`);
+  console.log(`✓ template, palette, contact sheet, anim strip, dir contact`);
   console.log(`  → src/assets/sprites/template/`);
 }
 
 main();
+

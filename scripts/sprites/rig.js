@@ -641,4 +641,12 @@ module.exports = {
   makeFrame,
   idx,
   inBounds,
+  // Exported for compositor.js — same rendering pipeline on part-composed frames.
+  applyShading,
+  despeckle,
+  applyOutline,
+  setPx,
+  span,
+  recolorRect,
+  CX,
 };
