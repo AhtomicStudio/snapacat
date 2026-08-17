@@ -31,21 +31,37 @@ const cache = new Map<string, CacheEntry>();
 const TTL_MS = 5 * 60_000;
 
 /**
- * Bumped on every invalidation so a fetch that was in flight across one can be
- * recognised and discarded.
+ * Per-uid write generation, plus a separate counter for clear-all.
  *
- * Without this, the sequence "open Hood (fetch starts) → leave → log a cat
- * (invalidate) → fetch resolves" writes the pre-cat list back with a fresh
- * timestamp, resurrecting the exact staleness bug the TTL exists to prevent,
- * and pinning it for a full TTL.
+ * Every mutation bumps its uid's generation, and a fetch records the stamp it
+ * was issued under. A fetch whose stamp has moved was issued before whatever
+ * moved it, so its result must not be cached — otherwise "open Hood (fetch
+ * starts) → log a cat → fetch resolves" writes the pre-cat list back with a
+ * fresh timestamp, pinning the stale list for a full TTL.
+ *
+ * Per-uid rather than a single global counter: a global one meant invalidating
+ * a friend's entry also discarded an unrelated in-flight fetch for your own,
+ * leaving your cache cold for no reason. clear-all needs its own counter
+ * because it must void uids that have no generation entry yet.
  */
-let epoch = 0;
+const generation = new Map<string, number>();
+let clearGeneration = 0;
+
+const stampOf = (uid: string): string => `${clearGeneration}:${generation.get(uid) ?? 0}`;
+
+const bump = (uid: string): void => {
+  generation.set(uid, (generation.get(uid) ?? 0) + 1);
+};
 
 /** Drops cached perches so the next read refetches. */
 export function invalidatePerchSprites(uid?: string): void {
-  epoch++;
-  if (uid) cache.delete(uid);
-  else cache.clear();
+  if (uid) {
+    cache.delete(uid);
+    bump(uid);
+  } else {
+    cache.clear();
+    clearGeneration++;
+  }
 }
 
 /**
@@ -53,14 +69,16 @@ export function invalidatePerchSprites(uid?: string): void {
  *
  * Preferred over invalidating when the sprite id is already known: dropping the
  * entry guarantees a cold fetch on the *next* Hood entry, which is the one the
- * user is most likely to make immediately after logging a cat — so plain
- * invalidation reintroduces the empty-perch wait exactly when it is most
- * visible. `at` is deliberately preserved so the entry still revalidates on its
- * original schedule; this is a local fast-path, not a claim of authority.
+ * user is most likely to make immediately after logging a cat. `at` is
+ * preserved so the entry still revalidates on its original schedule; this is a
+ * local fast-path, not a claim of authority.
  */
 export function primePerchSprites(uid: string, spriteId: string): void {
   const hit = cache.get(uid);
-  // No entry means nothing to prime — the next read fetches, which is correct.
+  // Bump unconditionally, and before the write. Any fetch already in flight was
+  // issued before this cat existed, so its result must neither overwrite what
+  // we prime nor — when there is nothing to prime — land as though current.
+  bump(uid);
   if (!hit) return;
   cache.set(uid, { ids: [...hit.ids, spriteId], at: hit.at });
 }
@@ -77,7 +95,7 @@ export function isFresh(entry: CacheEntry | undefined, now = Date.now()): boolea
  * and an undecorated Hood yields `round(0.30 * 6) = 2` — so only perches 0 and
  * 1 render. Returning cats oldest-first meant a newly logged cat landed on a
  * perch that does not exist yet, and the whole "log a cat, see it in your Hood"
- * loop silently did nothing for any user past their second cat.
+ * loop silently did nothing for anyone past their second cat.
  *
  * Exported for testing.
  */
@@ -91,24 +109,34 @@ export function buildPerchSprites(ids: string[], slots = MAX_HOOD_CATS): string[
  * The cache half of the hook, without React, so it can be tested directly.
  *
  * Serves a fresh entry without touching the network; otherwise fetches and
- * caches, unless an invalidation happened while the fetch was in flight.
+ * caches, unless the uid's generation moved while the fetch was in flight.
  */
 export async function loadPerchIds(uid: string): Promise<string[]> {
   const hit = cache.get(uid);
-  if (isFresh(hit)) return hit!.ids;
+  // Copy so callers — including React state — can never alias the cached array.
+  if (isFresh(hit)) return [...hit!.ids];
 
-  const issuedAt = epoch;
-  // Relies on getCats returning oldest-first: mock mode preserves insertion
-  // order, and Firestore's default document-id order is chronological given
-  // cat ids are `cat_${Date.now()}_${rand}`. buildPerchSprites takes the tail,
-  // so if that ever stops holding, the newest cat stops reaching perch 0 —
-  // silently. A created_at field would make it explicit.
+  const issuedAt = stampOf(uid);
+  /**
+   * Assumes getCats returns oldest-first: mock mode preserves insertion order,
+   * and Firestore's default document-id order is chronological given cat ids
+   * are `cat_${Date.now()}_${rand}`.
+   *
+   * This is load-bearing only on the cold-fetch fallback — process restart, TTL
+   * expiry, or a prime that found no entry. Immediately after logging a cat,
+   * primePerchSprites appends explicitly, so the newest cat reaching perch 0
+   * does not depend on this. A `created_at` field on Cat would make it explicit.
+   */
   const cats = await getCats(uid);
   const next = cats.map((c) => c.sprite_template_id).filter(Boolean);
 
-  // A fetch that crossed an invalidation predates whatever caused it. Showing
-  // it is fine; caching it is how the staleness bug comes back.
-  if (epoch === issuedAt) cache.set(uid, { ids: next, at: Date.now() });
+  if (next.length !== cats.length) {
+    console.warn(
+      `[perches] ${cats.length - next.length} of ${uid}'s cats have no sprite_template_id and were skipped.`,
+    );
+  }
+
+  if (stampOf(uid) === issuedAt) cache.set(uid, { ids: next, at: Date.now() });
   return next;
 }
 
@@ -135,9 +163,9 @@ export function usePerchSprites(uid: string): PerchSprites {
       })
       .catch((err) => {
         console.error(`Failed to load cats for ${uid}:`, err);
-        // Resolve to empty rather than holding the perches forever. Note the
-        // cache is deliberately NOT written on failure, so the next visit
-        // retries instead of blinding the Hood for a full TTL.
+        // Resolve to empty rather than holding the perches forever. The cache
+        // is deliberately NOT written on failure, so the next visit retries
+        // instead of blinding the Hood for a full TTL.
         if (alive) setIds([]);
       });
 

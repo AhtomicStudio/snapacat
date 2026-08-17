@@ -154,6 +154,26 @@ describe('loadPerchIds', () => {
     expect(mockGetCats).toHaveBeenCalledTimes(2);
   });
 
+  it("does not discard an unrelated uid's in-flight fetch", async () => {
+    // The generation counter is per-uid. A single global one meant invalidating
+    // a friend's entry threw away your own pending fetch, leaving your cache
+    // cold for no reason.
+    let release!: (v: unknown) => void;
+    mockGetCats.mockReturnValueOnce(
+      new Promise((res) => {
+        release = res;
+      }) as never,
+    );
+
+    const inFlight = loadPerchIds('u1');
+    invalidatePerchSprites('u2');
+    release([cat('calico')]);
+    await inFlight;
+
+    await loadPerchIds('u1');
+    expect(mockGetCats).toHaveBeenCalledTimes(1); // u1's result was cached
+  });
+
   it('revalidates once the TTL has expired', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(0);
@@ -184,6 +204,52 @@ describe('primePerchSprites', () => {
     primePerchSprites('u1', 'seal_point');
 
     expect(buildPerchSprites(await loadPerchIds('u1'), 6)[0]).toBe('seal_point');
+  });
+
+  it('survives a fetch that was in flight when it was primed', async () => {
+    // The real-world ordering: the Hood fetch starts, the user backs out and
+    // logs a cat before it lands. With no entry to append to, priming can only
+    // void the pending result — otherwise that pre-cat list is cached fresh and
+    // the new cat is missing for a full TTL.
+    let release!: (v: unknown) => void;
+    mockGetCats.mockReturnValueOnce(
+      new Promise((res) => {
+        release = res;
+      }) as never,
+    );
+
+    const inFlight = loadPerchIds('u1');
+    primePerchSprites('u1', 'seal_point');
+    release([cat('calico')]);
+    await inFlight;
+
+    mockGetCats.mockResolvedValue([cat('calico'), cat('seal_point')]);
+    expect(await loadPerchIds('u1')).toContain('seal_point');
+  });
+
+  it('does not let a racing fetch overwrite an entry it appended to', async () => {
+    // Same guard, no cache miss required: a stale entry revalidating in flight
+    // must not clobber the cat primed on top of it.
+    jest.useFakeTimers();
+    jest.setSystemTime(0);
+    mockGetCats.mockResolvedValue([cat('calico')]);
+    await loadPerchIds('u1');
+
+    jest.setSystemTime(5 * 60_000 + 1); // entry now stale
+    let release!: (v: unknown) => void;
+    mockGetCats.mockReturnValueOnce(
+      new Promise((res) => {
+        release = res;
+      }) as never,
+    );
+
+    const inFlight = loadPerchIds('u1');
+    primePerchSprites('u1', 'seal_point');
+    release([cat('calico')]);
+    await inFlight;
+
+    mockGetCats.mockResolvedValue([cat('calico'), cat('seal_point')]);
+    expect(await loadPerchIds('u1')).toContain('seal_point');
   });
 
   it('is a no-op with no cached entry, leaving the next read to fetch', async () => {

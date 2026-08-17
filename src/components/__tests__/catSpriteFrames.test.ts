@@ -87,10 +87,17 @@ describe('buildFrameInterpolation', () => {
           return oMin + ((oMax - oMin) * (t - iMin)) / (iMax - iMin);
         };
 
+        // Sampled every 0.25ms, NOT every 60Hz tick. The 1ms ramp this test
+        // exists to catch was invisible to 16.67ms sampling — with these exact
+        // durations no display frame ever landed inside one, which is precisely
+        // how it survived into a release. A 60Hz step here would pass cleanly
+        // on the very defect it replaced.
         const validOffsets = new Set(anim.frames.map((f) => -f * SIZE));
-        for (let t = 0; t <= total; t += 1000 / 60) {
-          expect(validOffsets.has(sample(t))).toBe(true);
+        const between: number[] = [];
+        for (let t = 0; t <= total; t += 0.25) {
+          if (!validOffsets.has(sample(t))) between.push(t);
         }
+        expect(between).toEqual([]);
       });
     });
   }
