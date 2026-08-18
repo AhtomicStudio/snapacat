@@ -388,18 +388,29 @@ const ALLOW_HIDDEN = {
 };
 
 function verifyDirFrames(atlas) {
-  const { compose } = require('./compositor');
-  const { checkFrame } = require('./verify');
+  const { compose, shadeComposite } = require('./compositor');
+  const { checkFrame, checkFinished } = require('./verify');
   const problems = [];
 
   for (const dir of ALL_DIRS) {
     for (const animName of ANIM_ORDER) {
       const anim = DIR_ANIMATIONS[animName];
       for (let f = 0; f < anim.frames.length; f++) {
+        const label = `${dir}/${animName}[${f}]`;
         const composed = compose(dir, animName, f, atlas);
-        problems.push(...checkFrame(`${dir}/${animName}[${f}]`, composed, {
+
+        // Geometry questions belong on the composed buffer.
+        problems.push(...checkFrame(label, composed, {
           allowHidden: ALLOW_HIDDEN[dir] ?? [],
         }));
+
+        // Anything the outline pass participates in has to be asked of the
+        // buffer that actually ships — pre-outline hole counts are noise,
+        // because applyOutline legitimately closes most of them.
+        const finished = composed.buf.slice();
+        shadeComposite(finished, composed.regionBuf);
+        finishFrame(finished, composed.whiskers);
+        problems.push(...checkFinished(label, finished));
       }
     }
   }

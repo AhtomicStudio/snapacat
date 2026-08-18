@@ -108,13 +108,23 @@ const DIR_ANIMATIONS = {
      * one. With six cats on screen and state readability as the core loop,
      * that is a gameplay bug wearing an art costume.
      */
+    /**
+     * Only the HEAD settles. Dropping the body a pixel pushed its bottom row to
+     * y31 — the last row of the frame — so applyOutline had nowhere to draw the
+     * bottom keyline and all 24 sleep frames rendered flush against the border
+     * with a flat cut where every other pose has a contour.
+     *
+     * This is the same mistake the walk table already documents: dy:+1 on
+     * something already resting on the ground line does not settle it, it
+     * clips it. A head sinking into the shoulders is the readable cue anyway.
+     */
     frames: [
-      // Frame 0: doze rest — settled a pixel lower than idle
-      { head: { v: 1, dy: 1 }, body: { dy: 1 } },
+      // Frame 0: doze rest — head settled into the shoulders
+      { head: { v: 1, dy: 1 }, body: {} },
       // Frame 1: doze mid breath
-      { head: { v: 1, dy: 1 }, body: { v: 1, dy: 1 } },
+      { head: { v: 1, dy: 1 }, body: { v: 1 } },
       // Frame 2: doze peak breath
-      { head: { v: 1, dy: 1 }, body: { v: 2, dy: 1 } },
+      { head: { v: 1, dy: 1 }, body: { v: 2 } },
     ],
     sequence: [0, 1, 2, 1],
     durations: [1400, 220, 700, 220],

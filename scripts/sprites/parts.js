@@ -365,11 +365,17 @@ function buildHead_E(variant) {
     [12, 15, 27],  // cheek; muzzle begins
     [13, 16, 28],  // muzzle full extension
     [14, 16, 28],
-    [15, 17, 27],  // jaw — lands directly on the shoulder at y16
-    // No throat/neck rows here. A 7px row over a 5px row, under a 12px skull
-    // and above a 12px shoulder, is three consecutive rows below 8px — a 12px
-    // pencil neck at 4x, which read as a meerkat. The jaw now meets the
-    // shoulder in one transition instead of three.
+    [15, 17, 27],  // jaw
+    // One joint row at shoulder width, overlapping the torso's own top row.
+    //
+    // This is NOT the old pencil neck: that was 7px over 5px between a 12px
+    // skull and a 12px shoulder — three consecutive rows under 8px, which read
+    // as a meerkat. This is a single 8px row between an 11px jaw and an 11px
+    // chest. It exists so E and W match the other six directions in carrying
+    // their own joint, rather than relying on head.dy === body.dy staying true
+    // forever. The next animation that turns or lowers the head would otherwise
+    // reopen the gap here and nowhere else.
+    [16, 16, 23],
   ];
   for (const [y, x0, x1] of skullSpans) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.HEAD);
@@ -603,10 +609,19 @@ function buildBody_N(variant) {
 // ---------------------------------------------------------------------------
 
 // Rig.js tail spans reused for S direction.
+/**
+ * y18 starts at x21, not x22, so the tail carries its own joint to the body.
+ *
+ * With `tail: {dx:1}` on walk frame 0 the wedge between the body's right edge
+ * and the tail widened from 2px to 3px at that row, and a 1px outline dilate
+ * bridges 2px but not 3 — leaving a single enclosed hole that sparkles for
+ * 180ms every cycle. Same principle as the head's neck stub: let the part span
+ * the joint rather than relying on a neighbour to be in the right place.
+ */
 const TAIL_SPANS = [
   [28, 25, 29], [27, 25, 29], [26, 25, 29], [25, 25, 28],
   [24, 25, 28], [23, 24, 27], [22, 24, 27], [21, 23, 26],
-  [20, 23, 25], [19, 22, 24], [18, 22, 23], [17, 21, 22],
+  [20, 23, 25], [19, 22, 24], [18, 21, 23], [17, 21, 22],
   [16, 21, 21],
 ];
 
@@ -706,15 +721,22 @@ function buildTail_N() {
  * Nothing reaches y31 — that row belongs to the ground shadow.
  */
 const LEG_LAYOUT = {
-  // Front-on: front paws forward, back paws peeking outboard behind them.
+  // Front-on: only the front paws show. The hind pair sits well inside the
+  // torso footprint so it is FULLY occluded rather than peeking a speck out
+  // past the body taper — a far leg is COAT_DARK, so a 1-3px instance reads as
+  // dirt on the silhouette edge, not as a limb. A part should be properly
+  // hidden or properly visible. The ±2px walk stride stays inside the body at
+  // these positions.
   S: {
     legFL: [10, 13, 27, false], legFR: [18, 21, 27, false],
-    legBL: [7, 9, 28, true], legBR: [22, 24, 28, true],
+    // bottom 28, not 30: the walk lifts the body 1px on passing frames, and a
+    // hidden leg reaching the ground line gets uncovered when it does.
+    legBL: [11, 14, 26, true, 28], legBR: [17, 20, 26, true, 28],
   },
   // Three-quarter: near side is the cat's right, so legFR/legBR lead.
   SE: {
     legFL: [14, 17, 25, true], legFR: [17, 20, 25, false],
-    legBL: [7, 10, 26, true], legBR: [9, 12, 26, false],
+    legBL: [11, 14, 26, true, 28], legBR: [15, 18, 26, true, 28],
   },
   // Profile: full leg columns, front pair right, back pair left.
   E: {
@@ -726,12 +748,12 @@ const LEG_LAYOUT = {
   // they spread either side of centre rather than crowding it. Front legs sit
   // behind the torso in draw order and barely show, which is correct.
   NE: {
-    legFL: [7, 10, 27, true], legFR: [9, 12, 27, true],
+    legFL: [11, 14, 26, true, 28], legFR: [15, 18, 26, true, 28],
     legBL: [10, 13, 25, true], legBR: [17, 20, 25, false],
   },
-  // Rear: hind paws forward, front paws peeking outboard.
+  // Rear: only the hind paws show; the front pair is fully behind the torso.
   N: {
-    legFL: [7, 9, 28, true], legFR: [22, 24, 28, true],
+    legFL: [12, 15, 25, true, 27], legFR: [16, 19, 25, true, 27],
     legBL: [10, 13, 27, false], legBR: [18, 21, 27, false],
   },
 };
@@ -744,14 +766,14 @@ const LEG_LAYOUT = {
 function buildLeg(dir, legId) {
   const { cell, fspan, fset } = makeBuilder(legId, dir);
   const R = REGION;
-  const [x0, x1, top, far] = LEG_LAYOUT[dir][legId];
+  const [x0, x1, top, far, bottom = 30] = LEG_LAYOUT[dir][legId];
 
   const shaft = far ? SLOT.COAT_DARK : SLOT.COAT_BASE;
   const paw = far ? SLOT.COAT_DARK : SLOT.FUR_LIGHT;
 
-  for (let y = top; y <= 28; y++) fspan(y, x0, x1, shaft, R.LEG);
-  fspan(29, x0 - 1, x1, paw, R.LEG);
-  fspan(30, x0 - 1, x1 - 1, paw, R.LEG);
+  for (let y = top; y <= bottom - 2; y++) fspan(y, x0, x1, shaft, R.LEG);
+  fspan(bottom - 1, x0 - 1, x1, paw, R.LEG);
+  fspan(bottom, x0 - 1, x1 - 1, paw, R.LEG);
 
   // Toe split, near legs only — invisible on a dark far leg and just noise.
   if (!far) {

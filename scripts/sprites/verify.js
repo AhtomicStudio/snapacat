@@ -108,13 +108,35 @@ function checkFrame(label, { buf, regionBuf, partBuf }, { allowHidden = [], minV
     );
   }
 
+  // allowHidden means "zero is acceptable here" — NOT "any count is acceptable".
+  // Exempting a part from the floor as well let 58 part-instances render 1-4
+  // visible pixels unreported, which is exactly the band the floor exists to
+  // reject: a far leg is COAT_DARK, so a 1px instance is a dark speck on the
+  // body's edge. A part should be properly hidden or properly visible.
   const visible = visibleByPart(partBuf);
   for (const [partId, n] of Object.entries(visible)) {
-    if (n === 0 && !allowHidden.includes(partId)) {
-      problems.push(`${label}: ${partId} renders 0 visible pixels`);
-    } else if (n > 0 && n < minVisible && !allowHidden.includes(partId)) {
+    if (n === 0) {
+      if (!allowHidden.includes(partId)) {
+        problems.push(`${label}: ${partId} renders 0 visible pixels`);
+      }
+    } else if (n < minVisible) {
       problems.push(`${label}: ${partId} renders only ${n} visible pixels`);
     }
+  }
+
+  // Row 31 and the frame's outer ring belong to the outline pass and the ground
+  // shadow. Art sitting there leaves applyOutline nowhere to draw a keyline, so
+  // the sprite renders flush against the border with a flat cut. This has now
+  // happened twice — a planted walk foot on y31, then the whole sleep body.
+  for (let x = 0; x < FRAME_SIZE; x++) {
+    if (buf[idx(x, 0)] !== SLOT.EMPTY) { problems.push(`${label}: art on row 0 at x${x}`); break; }
+  }
+  for (let x = 0; x < FRAME_SIZE; x++) {
+    if (buf[idx(x, FRAME_SIZE - 1)] !== SLOT.EMPTY) { problems.push(`${label}: art on row 31 at x${x} — no room for the bottom keyline`); break; }
+  }
+  for (let y = 0; y < FRAME_SIZE; y++) {
+    if (buf[idx(0, y)] !== SLOT.EMPTY) { problems.push(`${label}: art on column 0 at y${y}`); break; }
+    if (buf[idx(FRAME_SIZE - 1, y)] !== SLOT.EMPTY) { problems.push(`${label}: art on column 31 at y${y}`); break; }
   }
 
   const { headBottom, bodyTop } = headBodyJoin(regionBuf);
@@ -127,4 +149,47 @@ function checkFrame(label, { buf, regionBuf, partBuf }, { allowHidden = [], minV
   return problems;
 }
 
-module.exports = { checkFrame, componentCount, visibleByPart, headBodyJoin };
+/**
+ * Counts enclosed transparent pixels — holes the outline pass did not close.
+ *
+ * Must run on the FINISHED buffer. Pre-outline the sheet carries ~108 hole
+ * pixels that applyOutline legitimately fills (the whole-frame rig has the
+ * same ones), so the count is meaningless before that pass and precise after.
+ */
+function holeCount(buf) {
+  const outside = new Uint8Array(buf.length);
+  const stack = [];
+  for (let i = 0; i < FRAME_SIZE; i++) {
+    stack.push(idx(i, 0), idx(i, FRAME_SIZE - 1), idx(0, i), idx(FRAME_SIZE - 1, i));
+  }
+  while (stack.length) {
+    const i = stack.pop();
+    if (outside[i] || buf[i] !== SLOT.EMPTY) continue;
+    outside[i] = 1;
+    const x = i % FRAME_SIZE;
+    const y = (i / FRAME_SIZE) | 0;
+    if (x > 0) stack.push(idx(x - 1, y));
+    if (x < FRAME_SIZE - 1) stack.push(idx(x + 1, y));
+    if (y > 0) stack.push(idx(x, y - 1));
+    if (y < FRAME_SIZE - 1) stack.push(idx(x, y + 1));
+  }
+  let holes = 0;
+  for (let i = 0; i < buf.length; i++) {
+    if (buf[i] === SLOT.EMPTY && !outside[i]) holes++;
+  }
+  return holes;
+}
+
+/**
+ * Checks what actually ships. The composed buffer is the right layer for
+ * geometry questions; this is the right layer for anything the outline pass
+ * participates in.
+ */
+function checkFinished(label, buf) {
+  const holes = holeCount(buf);
+  return holes ? [`${label}: ${holes} enclosed hole pixel(s) survive outlining`] : [];
+}
+
+module.exports = {
+  checkFrame, checkFinished, componentCount, visibleByPart, headBodyJoin, holeCount,
+};
