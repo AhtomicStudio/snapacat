@@ -34,6 +34,12 @@ import { checkAndAwardDailyStreak } from './src/utils/progressionEngine';
 import { calculateSpawnChances, MAX_HOOD_CATS } from './src/utils/spawnCalculator';
 import { getEnvironmentById, DEFAULT_ENVIRONMENT } from './src/config/environments';
 import { CARD_SHADOW, pressScale } from './src/utils/styles';
+import {
+  ERROR_CODES,
+  SnapError,
+  describeError,
+  type SnapErrorCode,
+} from './src/utils/errorCodes';
 import type { User, Cat, Hood, UserProgression } from './src/types';
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -62,18 +68,23 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [progression, setProgression] = useState<UserProgression | null>(null);
   const [screenState, setScreenState] = useState<ScreenState>({ type: 'tabs', tab: 'home' });
-  const [bootError, setBootError] = useState(false);
+  // Holds the CODE, not a boolean — the error screen shows it so a user can
+  // report exactly which failure path they hit.
+  const [bootError, setBootError] = useState<SnapErrorCode | null>(null);
   const [streakToast, setStreakToast] = useState<number | null>(null);
 
   // ── Boot (retryable) ────────────────────────────────────────────────────────
   const boot = useCallback(async () => {
-    setBootError(false);
+    setBootError(null);
     try {
       const [userData, prog] = await Promise.all([
         getUser(CURRENT_UID),
         getUserProgression(CURRENT_UID),
       ]);
-      if (!userData) throw new Error(`User ${CURRENT_UID} not found`);
+      // Distinct from a fetch failure: the read succeeded and the document is
+      // simply not there. That is the first-launch case against real Firestore,
+      // and it needs its own code because the fix is completely different.
+      if (!userData) throw new SnapError('SNAP-BOOT-02');
       setUser(userData);
       // Award daily streak on first open of the day
       const streaked = checkAndAwardDailyStreak(prog);
@@ -83,8 +94,11 @@ export default function App() {
         setStreakToast(streaked.streak_count ?? 1);
       }
     } catch (err) {
-      console.error('App boot failed:', err);
-      setBootError(true);
+      const info = describeError(err, 'SNAP-BOOT-01');
+      // Log the code, not the caught object — exception text is written for
+      // developers and routinely carries internals.
+      console.warn(`[${info.code}] boot failed`);
+      setBootError(info.code);
     }
   }, []);
 
@@ -167,11 +181,25 @@ export default function App() {
         style={{ flex: 1, backgroundColor: '#FAF6F0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}
       >
         <Text style={{ fontSize: 46, marginBottom: 16 }}>🙀</Text>
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29' }}>
-          Something went wrong
+        <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29', textAlign: 'center' }}>
+          {ERROR_CODES[bootError].title}
         </Text>
         <Text style={{ marginTop: 8, fontSize: 13, color: '#706B67', textAlign: 'center', lineHeight: 20 }}>
-          SnapaCat couldn't load your profile. Check your connection and try again.
+          {ERROR_CODES[bootError].message}
+        </Text>
+        {ERROR_CODES[bootError].hint && (
+          <Text style={{ marginTop: 6, fontSize: 13, color: '#706B67', textAlign: 'center', lineHeight: 20 }}>
+            {ERROR_CODES[bootError].hint}
+          </Text>
+        )}
+        {/* The code is the point: it makes a screenshot from a user actionable
+            instead of "it said something went wrong". Muted so it reads as a
+            reference, not as blame. */}
+        <Text
+          selectable
+          style={{ marginTop: 14, fontSize: 11, color: '#A49E98', letterSpacing: 0.5 }}
+        >
+          {bootError}
         </Text>
         <Pressable
           onPress={boot}
