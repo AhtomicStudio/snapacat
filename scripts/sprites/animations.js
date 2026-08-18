@@ -39,29 +39,50 @@ const DIR_ANIMATIONS = {
     durations: [560, 130, 420, 130],
   },
 
+  /**
+   * Diagonal-pair walk: FL+BR swing together, then FR+BL.
+   *
+   * The previous table moved legs on dy ONLY, so there was no stride, no reach
+   * and no push — measured, the two passing frames in NE were byte-identical
+   * and the two contact frames differed by 2 pixels out of 335. Four frames of
+   * walk delivered about one pose.
+   *
+   * Three things make this read as walking rather than jittering:
+   *
+   * - **Horizontal travel.** dx ±2 is the minimum that registers at 32px; ±1
+   *   disappears into the outline.
+   * - **The body sits DOWN on contact and rises on passing.** That is the
+   *   weight. Note contact legs use dy 0, not +1 — pushing the planted foot
+   *   down put it on row y31, which is where the ground shadow lives.
+   * - **The head lags the body by one frame.** Bobbing them together reads as a
+   *   bounce; letting the head arrive late is the follow-through that reads as
+   *   mass.
+   */
   walk: {
     frames: [
-      // Frame 0: left contact — FL+BR plant, FR+BL lift
+      // Frame 0: left contact — FL+BR planted forward, FR+BL lifted and back.
       {
-        legFL: { dy: 1 }, legBR: { dy: 1 },
-        legFR: { dy: -1 }, legBL: { dy: -1 },
-        tail: { dx: 1 },
+        legFL: { dx: 2, dy: 0 }, legBR: { dx: 2, dy: 0 },
+        legFR: { dx: -2, dy: -1 }, legBL: { dx: -2, dy: -1 },
+        body: { dy: 0 }, head: { dy: -1 }, tail: { dx: 1 },
       },
-      // Frame 1: left passing — body+head bob up
+      // Frame 1: left passing — body up, lifted pair at full clearance.
       {
-        body: { dy: -1 }, head: { dy: -1 },
-        tail: { dx: -1 },
+        legFL: { dx: 0, dy: 0 }, legBR: { dx: 0, dy: 0 },
+        legFR: { dx: 0, dy: -2 }, legBL: { dx: 0, dy: -2 },
+        body: { dy: -1 }, head: { dy: 0 }, tail: { dx: 0, dy: -1 },
       },
-      // Frame 2: right contact — FR+BL plant, FL+BR lift
+      // Frame 2: right contact — the mirror of frame 0.
       {
-        legFR: { dy: 1 }, legBL: { dy: 1 },
-        legFL: { dy: -1 }, legBR: { dy: -1 },
-        tail: { dx: -1 },
+        legFR: { dx: 2, dy: 0 }, legBL: { dx: 2, dy: 0 },
+        legFL: { dx: -2, dy: -1 }, legBR: { dx: -2, dy: -1 },
+        body: { dy: 0 }, head: { dy: -1 }, tail: { dx: -1 },
       },
-      // Frame 3: right passing — body+head bob up
+      // Frame 3: right passing.
       {
-        body: { dy: -1 }, head: { dy: -1 },
-        tail: { dx: 1 },
+        legFR: { dx: 0, dy: 0 }, legBL: { dx: 0, dy: 0 },
+        legFL: { dx: 0, dy: -2 }, legBR: { dx: 0, dy: -2 },
+        body: { dy: -1 }, head: { dy: 0 }, tail: { dx: 0, dy: -1 },
       },
     ],
     sequence: [0, 1, 2, 3],
@@ -70,18 +91,26 @@ const DIR_ANIMATIONS = {
 
   sleep: {
     /**
-     * Dozing while sitting: same posture as idle but with closed eyes (head
-     * variant 1) and a slower breathing rhythm. A proper lying-down sleep is
-     * a future animation — the format supports it via larger dy offsets and a
-     * lying body variant, but the part art doesn't need to exist yet.
+     * Dozing while sitting: closed eyes, a settled posture, and a slower
+     * breathing rhythm. A proper lying-down sleep is a future animation — the
+     * format supports it via larger dy offsets and a lying body variant, but
+     * the part art doesn't need to exist yet.
+     *
+     * The head and body settle by a pixel, which is not decoration. Closed eyes
+     * are the only thing distinguishing sleep from idle, and the rear-facing
+     * heads have no eyes to close — so N, NE and NW rendered sleep frames that
+     * were byte-identical to idle. Nine of the sheet's eighty frames were
+     * duplicates, and a sleeping cat facing away looked exactly like an awake
+     * one. With six cats on screen and state readability as the core loop,
+     * that is a gameplay bug wearing an art costume.
      */
     frames: [
-      // Frame 0: doze rest
-      { head: { v: 1 } },
+      // Frame 0: doze rest — settled a pixel lower than idle
+      { head: { v: 1, dy: 1 }, body: { dy: 1 } },
       // Frame 1: doze mid breath
-      { head: { v: 1 }, body: { v: 1 } },
+      { head: { v: 1, dy: 1 }, body: { v: 1, dy: 1 } },
       // Frame 2: doze peak breath
-      { head: { v: 1 }, body: { v: 2 } },
+      { head: { v: 1, dy: 1 }, body: { v: 2, dy: 1 } },
     ],
     sequence: [0, 1, 2, 1],
     durations: [1400, 220, 700, 220],

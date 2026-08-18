@@ -167,7 +167,11 @@ const SHADOWS = {
 const WHISKER_OFFSETS = {
   S:  [[-7, -2], [-8, -2], [8, -2], [9, -2]],
   SE: [[7, -2], [8, -3]],
-  E:  [[8, -5], [9, -6]],
+  // E has none: the offsets resolved to (28,14) and (29,13), which extended the
+  // muzzle by two pixels and lengthened the very bill the head rebuild removes.
+  // rig.js puts it plainly — a whisker has to grow out of the face, not hover
+  // beside it — and in profile there is no clear face-edge to grow from.
+  E:  [],
   NE: [],
   N:  [],
 };

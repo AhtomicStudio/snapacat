@@ -102,33 +102,108 @@ function mirrorCell(cell) {
 // We convert frame coords to cell-local coords by subtracting this offset.
 // ---------------------------------------------------------------------------
 
+/**
+ * Records paint operations in frame coordinates; the cell is sized to fit them
+ * afterwards by finalizeCell().
+ *
+ * The previous version allocated a fixed-size cell from PART_CELLS up front and
+ * relied on cellSet's bounds check to discard anything outside it — silently.
+ * That dropped **208 authored pixels** across the atlas: every leg on the
+ * N-facing cat (all four rendered zero pixels), three of E's four legs, and the
+ * entire E tail. Nothing warned, and the art looked "drawn but wrong" rather
+ * than "not drawn".
+ *
+ * Sizing the cell to the art it actually contains makes that impossible, and
+ * has a second effect worth understanding: the anchor now CANCELS OUT of the
+ * compositor's placement maths.
+ *
+ *   ax  = (root.x + anchor[0]) - bboxX0
+ *   fx  = root.x + anchor[0] + dx - ax   ==>   fx = bboxX0 + dx
+ *
+ * So a part lands exactly where it was authored, shifted only by the animation
+ * offset. That is what frame-space authoring was always meant to mean.
+ */
 function makeBuilder(partId, dir) {
-  const cellDef = PART_CELLS[partId];
-  const cell = makeCell(partId);
-  const root = ROOTS[dir];
-  const offset = ANCHORS[dir][partId];
+  const ops = [];
+  const cell = {
+    __pending: { ops, root: ROOTS[dir], offset: ANCHORS[dir][partId], partId, dir },
+  };
 
-  const fx = root.x + offset[0] - cellDef.ax;
-  const fy = root.y + offset[1] - cellDef.ay;
+  const record = (x, y, slot, region) => {
+    // EMPTY is a visual no-op and must not inflate the bounding box.
+    if (slot === SLOT.EMPTY) return;
+    ops.push({ x, y, slot, region });
+  };
 
   return {
     cell,
     /** Set a pixel in frame coordinates. */
     fset(frameX, frameY, slot, region) {
-      cellSet(cell, frameX - fx, frameY - fy, slot, region);
+      record(frameX, frameY, slot, region);
     },
     /** Fill a horizontal span in frame coordinates. */
     fspan(frameY, frameX0, frameX1, slot, region) {
-      cellSpan(cell, frameY - fy, frameX0 - fx, frameX1 - fx, slot, region);
+      for (let x = frameX0; x <= frameX1; x++) record(x, frameY, slot, region);
     },
     /** Fill a mirrored pair of spans about frame CX=15.5. */
     fspanMirror(frameY, frameX0, frameX1, slot, region) {
-      cellSpan(cell, frameY - fy, frameX0 - fx, frameX1 - fx, slot, region);
-      const mx0 = 31 - frameX1;
-      const mx1 = 31 - frameX0;
-      cellSpan(cell, frameY - fy, mx0 - fx, mx1 - fx, slot, region);
+      for (let x = frameX0; x <= frameX1; x++) record(x, frameY, slot, region);
+      for (let x = 31 - frameX1; x <= 31 - frameX0; x++) record(x, frameY, slot, region);
     },
   };
+}
+
+/**
+ * Sizes a pending cell to its art and rasterises it, in place.
+ *
+ * Mutates rather than returning a new object so the builders can keep their
+ * `return cell` shape — twenty functions that would otherwise all need editing.
+ */
+function finalizeCell(cell) {
+  const pending = cell.__pending;
+  if (!pending) return cell; // already finalised
+  delete cell.__pending;
+
+  const { ops, root, offset, partId, dir } = pending;
+
+  if (ops.length === 0) {
+    // A part that paints nothing is almost always a bug, but it is not this
+    // function's job to decide that — buildPartAtlas reports it.
+    Object.assign(cell, {
+      w: 1, h: 1, ax: 0, ay: 0,
+      px: new Uint8Array(1), regions: new Uint8Array(1),
+      partId, dir, painted: 0,
+    });
+    return cell;
+  }
+
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const op of ops) {
+    if (op.x < x0) x0 = op.x;
+    if (op.x > x1) x1 = op.x;
+    if (op.y < y0) y0 = op.y;
+    if (op.y > y1) y1 = op.y;
+  }
+
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const px = new Uint8Array(w * h);
+  const regions = new Uint8Array(w * h);
+
+  for (const op of ops) {
+    const i = (op.y - y0) * w + (op.x - x0);
+    px[i] = op.slot;
+    if (op.region !== undefined) regions[i] = op.region;
+  }
+
+  Object.assign(cell, {
+    w, h, px, regions,
+    ax: (root.x + offset[0]) - x0,
+    ay: (root.y + offset[1]) - y0,
+    partId, dir,
+    painted: ops.length,
+  });
+  return cell;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,38 +324,62 @@ function buildHead_E(variant) {
   const { cell, fspan, fset } = makeBuilder('head', 'E');
   const R = REGION;
 
-  // Single visible ear
-  for (const [y, x0, x1] of [[4, 19, 22], [5, 18, 23], [6, 18, 23]]) {
+  // Ear, angled back rather than straight up — a profile cat's ear tilts with
+  // the skull, and a vertical one reads as a comb.
+  for (const [y, x0, x1] of [[4, 18, 20], [5, 18, 21], [6, 18, 22]]) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.EAR);
   }
-  fspan(5, 20, 21, SLOT.PINK, R.EAR);
+  fspan(5, 19, 20, SLOT.PINK, R.EAR);
 
-  // Profile skull
+  /**
+   * Profile skull as a WEDGE, not a sphere.
+   *
+   * The previous table was an 11x11 circle with a 2px protrusion and no neck,
+   * finished off by a 2px block of PINK at the very tip. That is the anatomical
+   * definition of a rubber duck, and the mackerel pattern's flank blotch
+   * completed the read as a folded wing.
+   *
+   * A cat in profile has a high sloping cranium, a brow at the widest point,
+   * then a distinct step down and FORWARD to a muzzle that sits low, with a
+   * chin undercutting it.
+   */
   const skullSpans = [
-    [7, 16, 24], [8, 15, 25], [9, 15, 25], [10, 15, 25],
-    [11, 15, 25], [12, 16, 26], [13, 16, 26], [14, 17, 25],
-    [15, 17, 25], [16, 18, 24], [17, 19, 23],
+    [7, 17, 24],   // cranium top
+    [8, 16, 25],
+    [9, 15, 26],   // brow — widest
+    [10, 15, 26],
+    [11, 15, 26],  // eye row
+    [12, 15, 27],  // cheek; muzzle begins
+    [13, 16, 28],  // muzzle full extension
+    [14, 16, 28],
+    [15, 17, 27],  // jaw
+    [16, 18, 24],  // throat
+    [17, 19, 23],  // neck
   ];
   for (const [y, x0, x1] of skullSpans) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.HEAD);
   }
 
   // Under-lash
-  fspan(11, 21, 23, SLOT.OUTLINE_SOFT, R.HEAD);
+  fspan(9, 22, 24, SLOT.OUTLINE_SOFT, R.HEAD);
 
   if (variant === 1) {
-    fspan(12, 22, 23, SLOT.OUTLINE_SOFT, R.HEAD);
+    fspan(10, 22, 24, SLOT.OUTLINE_SOFT, R.HEAD);
   } else {
-    // One eye in profile
-    for (let y = 12; y <= 13; y++) fspan(y, 22, 24, SLOT.EYE, R.HEAD);
-    fset(22, 13, SLOT.EYE_DARK, R.HEAD);
-    fset(22, 12, SLOT.EYE_SHINE, R.HEAD);
+    // One eye in profile, sitting under the brow rather than beside the muzzle.
+    for (let y = 10; y <= 11; y++) fspan(y, 22, 24, SLOT.EYE, R.HEAD);
+    fset(24, 11, SLOT.EYE_DARK, R.HEAD);
+    fset(22, 10, SLOT.EYE_SHINE, R.HEAD);
   }
 
-  // Muzzle protruding right
-  fspan(14, 24, 27, SLOT.FUR_LIGHT, R.MUZZLE);
-  fspan(15, 24, 27, SLOT.FUR_LIGHT, R.MUZZLE);
-  fspan(14, 26, 27, SLOT.PINK, R.MUZZLE);
+  // Muzzle: low and forward, with the nose a SINGLE pixel at its top-front.
+  // A 2px block at the tip was most of the bill.
+  fspan(12, 26, 28, SLOT.FUR_LIGHT, R.MUZZLE);
+  fspan(13, 26, 28, SLOT.FUR_LIGHT, R.MUZZLE);
+  fspan(14, 26, 28, SLOT.FUR_LIGHT, R.MUZZLE);
+  fset(28, 12, SLOT.PINK, R.MUZZLE);
+  // Chin, undercutting the muzzle — the other half of what stops a beak read.
+  fspan(15, 26, 27, SLOT.OUTLINE_SOFT, R.MUZZLE);
 
   return cell;
 }
@@ -374,8 +473,13 @@ function buildBody_SE(variant) {
   const R = REGION;
   const breath = variant;
 
-  // 3/4 body — slightly wider right, angled
+  // 3/4 body — slightly wider right, angled.
+  // y18 is a neck row. The skull ends at y17 and the torso used to start at
+  // y19, leaving that row empty — the head floated, and after outlining the gap
+  // read as a decapitation seam. buildBody_E already starts at y18; SE and NE
+  // did not.
   const spans = [
+    [18, 13, 20],
     [19, 11, 21], [20, 10, 22], [21, 9, 23], [22, 8, 24],
     [23, 8, 24], [24, 7, 24], [25, 7, 24], [26, 7, 25],
     [27, 7, 25], [28, 7, 25], [29, 8, 24], [30, 9, 23],
@@ -403,9 +507,10 @@ function buildBody_E(variant) {
   const R = REGION;
   const breath = variant;
 
-  // Side view — elongated, rounder. Starts at y18 to overlap with head base.
+  // Side view — elongated, rounder. Rises to a 6px neck at y17 so the wedge
+  // skull sits on shoulders rather than balancing on the torso's top edge.
   const spans = [
-    [18, 9, 22], [19, 8, 23], [20, 7, 23], [21, 6, 23],
+    [17, 17, 22], [18, 12, 23], [19, 9, 23], [20, 7, 23], [21, 6, 23],
     [22, 5, 24], [23, 5, 24], [24, 5, 24], [25, 5, 24],
     [26, 5, 23], [27, 6, 23], [28, 6, 23], [29, 7, 22],
     [30, 8, 21],
@@ -432,8 +537,10 @@ function buildBody_NE(variant) {
   const R = REGION;
   const breath = variant;
 
-  // Same width profile as SE, but seen from behind
+  // Same width profile as SE, but seen from behind. y18 is the neck row —
+  // see buildBody_SE.
   const spans = [
+    [18, 13, 20],
     [19, 10, 20], [20, 9, 21], [21, 8, 22], [22, 7, 23],
     [23, 7, 23], [24, 7, 24], [25, 7, 24], [26, 6, 24],
     [27, 6, 24], [28, 6, 24], [29, 7, 23], [30, 8, 22],
@@ -505,11 +612,16 @@ function buildTail_SE() {
 
 function buildTail_E() {
   const { cell, fspan } = makeBuilder('tail', 'E');
-  // Tail extends left, curving upward
+  // Raised tail, rising clear of the back line with a hook at the tip.
+  // The old table topped out at y17 against a body whose top row is y18, so
+  // almost all of it was painted underneath the torso — 0 visible pixels. A
+  // tail that clears the silhouette is the strongest "cat, not duck" signal
+  // available in profile, so it has to actually show.
   const spans = [
-    [27, 6, 10], [26, 5, 10], [25, 4, 9], [24, 3, 9],
-    [23, 3, 8], [22, 2, 7], [21, 2, 6], [20, 2, 5],
-    [19, 2, 4], [18, 3, 4], [17, 3, 4],
+    [27, 6, 9], [26, 5, 9], [25, 4, 8], [24, 4, 8],
+    [23, 3, 7], [22, 3, 7], [21, 2, 6], [20, 2, 6],
+    [19, 2, 5], [18, 2, 5], [17, 1, 4], [16, 1, 4],
+    [15, 2, 5], [14, 2, 5], [13, 3, 6],
   ];
   for (const [y, x0, x1] of spans) fspan(y, x0, x1, SLOT.COAT_BASE, REGION.TAIL);
   return cell;
@@ -517,11 +629,13 @@ function buildTail_E() {
 
 function buildTail_NE() {
   const { cell, fspan } = makeBuilder('tail', 'NE');
-  // Behind-and-left tail — visible because cat faces away
+  // Behind-and-left tail, raised clear of the back line. Same reasoning as
+  // buildTail_E: below the body's top row it is simply painted over.
   const spans = [
     [27, 6, 10], [26, 5, 10], [25, 5, 9], [24, 4, 9],
-    [23, 4, 8], [22, 3, 8], [21, 3, 7], [20, 3, 6],
-    [19, 3, 5], [18, 4, 5], [17, 4, 5],
+    [23, 4, 8], [22, 3, 8], [21, 3, 7], [20, 3, 7],
+    [19, 2, 6], [18, 2, 6], [17, 2, 5], [16, 2, 5],
+    [15, 3, 6], [14, 3, 6],
   ];
   for (const [y, x0, x1] of spans) fspan(y, x0, x1, SLOT.COAT_BASE, REGION.TAIL);
   return cell;
@@ -549,79 +663,77 @@ function buildTail_N() {
  * with a darker foot — visually distinguishes front from rear.
  */
 
-function buildLeg_S(isFront) {
-  // In S view, legs are mostly hidden behind the body. Only paws show at y28-30.
-  const partId = isFront ? 'legFL' : 'legBL';
-  const { cell, fspan, fset } = makeBuilder(partId, 'S');
+/**
+ * Where each leg sits, per direction: [x0, x1, topY, far].
+ *
+ * Every leg is authored at its true frame position and built against its OWN
+ * part id, so self-sizing cells place it exactly where it was drawn. Previously
+ * one shared cell was built for "front" and one for "back", and the anchor
+ * delta was expected to separate the copies — which put all four E legs within
+ * a pixel of each other and every N leg outside its own cell.
+ *
+ * `far` legs are painted entirely in COAT_DARK. At 32px depth reads through
+ * value, not perspective, and front-vs-back was previously distinguished by paw
+ * colour — the wrong axis. Near-vs-far is what the eye needs.
+ *
+ * Near and far legs overlap by design; draw order puts far first so the near
+ * leg occludes it, leaving a sliver that reads as a second limb behind.
+ * Nothing reaches y31 — that row belongs to the ground shadow.
+ */
+const LEG_LAYOUT = {
+  // Front-on: front paws forward, back paws peeking outboard behind them.
+  S: {
+    legFL: [10, 13, 27, false], legFR: [18, 21, 27, false],
+    legBL: [7, 9, 28, true], legBR: [22, 24, 28, true],
+  },
+  // Three-quarter: near side is the cat's right, so legFR/legBR lead.
+  SE: {
+    legFL: [14, 17, 25, true], legFR: [17, 20, 25, false],
+    legBL: [7, 10, 26, true], legBR: [9, 12, 26, false],
+  },
+  // Profile: full leg columns, front pair right, back pair left.
+  E: {
+    legFL: [16, 19, 23, true], legFR: [18, 21, 23, false],
+    legBL: [6, 9, 23, true], legBR: [8, 11, 23, false],
+  },
+  // Rear three-quarter: hindquarters lead, front legs mostly occluded.
+  // Rear three-quarter: hindquarters lead and both hind legs are visible, so
+  // they spread either side of centre rather than crowding it. Front legs sit
+  // behind the torso in draw order and barely show, which is correct.
+  NE: {
+    legFL: [7, 10, 27, true], legFR: [9, 12, 27, true],
+    legBL: [10, 13, 25, true], legBR: [17, 20, 25, false],
+  },
+  // Rear: hind paws forward, front paws peeking outboard.
+  N: {
+    legFL: [7, 9, 28, true], legFR: [22, 24, 28, true],
+    legBL: [10, 13, 27, false], legBR: [18, 21, 27, false],
+  },
+};
+
+/**
+ * Draws one leg: a column down to a slightly wider paw.
+ * The paw flares one pixel left and loses one on the last row, which is what
+ * stops it reading as a rectangle.
+ */
+function buildLeg(dir, legId) {
+  const { cell, fspan, fset } = makeBuilder(legId, dir);
   const R = REGION;
+  const [x0, x1, top, far] = LEG_LAYOUT[dir][legId];
 
-  // Minimal upper leg visible above paw
-  fspan(27, 10, 13, SLOT.COAT_BASE, R.LEG);
-  fspan(28, 10, 13, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(29, 9, 13, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(30, 9, 12, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
+  const shaft = far ? SLOT.COAT_DARK : SLOT.COAT_BASE;
+  const paw = far ? SLOT.COAT_DARK : SLOT.FUR_LIGHT;
 
-  // Toe split
-  if (isFront) {
-    fset(11, 29, SLOT.OUTLINE_SOFT, R.LEG);
-    fset(11, 30, SLOT.OUTLINE_SOFT, R.LEG);
+  for (let y = top; y <= 28; y++) fspan(y, x0, x1, shaft, R.LEG);
+  fspan(29, x0 - 1, x1, paw, R.LEG);
+  fspan(30, x0 - 1, x1 - 1, paw, R.LEG);
+
+  // Toe split, near legs only — invisible on a dark far leg and just noise.
+  if (!far) {
+    const toe = x0 + Math.floor((x1 - x0) / 2);
+    fset(toe, 29, SLOT.OUTLINE_SOFT, R.LEG);
+    fset(toe, 30, SLOT.OUTLINE_SOFT, R.LEG);
   }
-
-  return cell;
-}
-
-function buildLeg_SE(isFront) {
-  const partId = isFront ? 'legFL' : 'legBL';
-  const { cell, fspan } = makeBuilder(partId, 'SE');
-  const R = REGION;
-
-  // More of the leg visible in 3/4 view
-  for (let y = 25; y <= 27; y++) fspan(y, 13, 16, SLOT.COAT_BASE, R.LEG);
-  fspan(28, 13, 16, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(29, 12, 16, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(30, 12, 15, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-
-  return cell;
-}
-
-function buildLeg_E(isFront) {
-  const partId = isFront ? 'legFL' : 'legBL';
-  const { cell, fspan } = makeBuilder(partId, 'E');
-  const R = REGION;
-
-  // Full side view — tall, narrow column
-  for (let y = 23; y <= 27; y++) fspan(y, 14, 17, SLOT.COAT_BASE, R.LEG);
-  fspan(28, 14, 17, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(29, 13, 17, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-  fspan(30, 13, 16, isFront ? SLOT.FUR_LIGHT : SLOT.COAT_BASE, R.LEG);
-
-  return cell;
-}
-
-function buildLeg_NE(isFront) {
-  const partId = isFront ? 'legFL' : 'legBL';
-  const { cell, fspan } = makeBuilder(partId, 'NE');
-  const R = REGION;
-
-  // Seen from behind — similar to SE but no special paw detail
-  for (let y = 25; y <= 27; y++) fspan(y, 13, 16, SLOT.COAT_BASE, R.LEG);
-  fspan(28, 13, 16, SLOT.COAT_BASE, R.LEG);
-  fspan(29, 12, 16, SLOT.COAT_BASE, R.LEG);
-  fspan(30, 12, 15, SLOT.COAT_BASE, R.LEG);
-
-  return cell;
-}
-
-function buildLeg_N(isFront) {
-  const partId = isFront ? 'legFL' : 'legBL';
-  const { cell, fspan } = makeBuilder(partId, 'N');
-  const R = REGION;
-
-  // Symmetric back view, same as S but no paw detail
-  fspan(27, 10, 13, SLOT.COAT_BASE, R.LEG);
-  fspan(28, 10, 13, SLOT.COAT_BASE, R.LEG);
-  fspan(29, 9, 13, SLOT.COAT_BASE, R.LEG);
-  fspan(30, 9, 12, SLOT.COAT_BASE, R.LEG);
 
   return cell;
 }
@@ -634,13 +746,8 @@ const HEAD_BUILDERS = { S: buildHead_S, SE: buildHead_SE, E: buildHead_E, NE: bu
 const BODY_BUILDERS = { S: buildBody_S, SE: buildBody_SE, E: buildBody_E, NE: buildBody_NE, N: buildBody_N };
 const TAIL_BUILDERS = { S: buildTail_S, SE: buildTail_SE, E: buildTail_E, NE: buildTail_NE, N: buildTail_N };
 
-const LEG_BUILDERS = {
-  S:  buildLeg_S,
-  SE: buildLeg_SE,
-  E:  buildLeg_E,
-  NE: buildLeg_NE,
-  N:  buildLeg_N,
-};
+// Legs no longer need a per-direction builder table — buildLeg(dir, legId)
+// reads LEG_LAYOUT directly.
 
 /** Number of variants per part. */
 const VARIANT_COUNT = {
@@ -659,33 +766,40 @@ const VARIANT_COUNT = {
 function buildPartAtlas() {
   const atlas = {};
   for (const part of PART_IDS) atlas[part] = {};
+  const empty = [];
+
+  /** Finalises a pending cell and flags it if it painted nothing. */
+  const fin = (cell) => {
+    finalizeCell(cell);
+    if (cell.painted === 0) empty.push(`${cell.partId}/${cell.dir}`);
+    return cell;
+  };
 
   for (const dir of AUTHORED) {
     // Head — 2 variants (open/closed eyes)
     atlas.head[dir] = [];
     for (let v = 0; v < VARIANT_COUNT.head; v++) {
-      atlas.head[dir].push(HEAD_BUILDERS[dir](v));
+      atlas.head[dir].push(fin(HEAD_BUILDERS[dir](v)));
     }
 
     // Body — 3 variants (breath levels)
     atlas.body[dir] = [];
     for (let v = 0; v < VARIANT_COUNT.body; v++) {
-      atlas.body[dir].push(BODY_BUILDERS[dir](v));
+      atlas.body[dir].push(fin(BODY_BUILDERS[dir](v)));
     }
 
     // Tail — 1 variant
-    atlas.tail[dir] = [TAIL_BUILDERS[dir]()];
+    atlas.tail[dir] = [fin(TAIL_BUILDERS[dir]())];
 
-    // Legs — 1 variant each
-    // Front legs are built with isFront=true, back legs with isFront=false.
-    // Left and right legs share the same cell art (mirrored by the compositor
-    // when needed, or distinguished only by draw order in S/N views).
-    const frontLeg = LEG_BUILDERS[dir](true);
-    const backLeg = LEG_BUILDERS[dir](false);
-    atlas.legFL[dir] = [{ ...frontLeg, px: frontLeg.px.slice(), regions: frontLeg.regions.slice() }];
-    atlas.legFR[dir] = [{ ...frontLeg, px: frontLeg.px.slice(), regions: frontLeg.regions.slice() }];
-    atlas.legBL[dir] = [{ ...backLeg, px: backLeg.px.slice(), regions: backLeg.regions.slice() }];
-    atlas.legBR[dir] = [{ ...backLeg, px: backLeg.px.slice(), regions: backLeg.regions.slice() }];
+    // Legs — four distinct cells, each authored at its own frame position.
+    for (const legId of ['legFL', 'legFR', 'legBL', 'legBR']) {
+      atlas[legId][dir] = [fin(buildLeg(dir, legId))];
+    }
+  }
+
+  // A part that paints nothing is always a bug and used to be invisible.
+  if (empty.length) {
+    console.warn(`[parts] ${empty.length} part(s) painted no pixels: ${empty.join(', ')}`);
   }
 
   return atlas;

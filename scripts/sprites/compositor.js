@@ -60,7 +60,10 @@ function compose(dir, animName, frameIdx, atlas) {
     const cell = cells[Math.min(variant, cells.length - 1)];
     if (!cell) continue;
 
-    const { ax, ay } = PART_CELLS[partId];
+    // Anchor comes from the CELL, not PART_CELLS — cells are sized to their art
+    // and carry their own origin. Reading the fixed table here was half of why
+    // 208 authored pixels were being discarded.
+    const { ax, ay } = cell;
     const fx = root.x + anchor[0] + dx - ax;
     const fy = root.y + anchor[1] + dy - ay;
 
