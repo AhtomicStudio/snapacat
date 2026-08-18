@@ -212,7 +212,18 @@ function finalizeCell(cell) {
 
 // Rig.js coordinate data (S direction), reused directly via frame-space helpers.
 const HEAD_TOP = 6;
-const HEAD_HALF = [5, 6, 7, 8, 8, 8, 8, 8, 7, 7, 6, 5, 4];
+/**
+ * y6..y19. The final entry is a neck stub that overlaps the torso.
+ *
+ * The joint has to belong to the HEAD, not the body. Closing the gap from the
+ * torso side is correct for a static pose and fails the moment the head takes a
+ * `dy` — a 1px head lift on a walk contact frame opened a gap on 12 of 80
+ * frames, 4 of which flood-filled as a fully detached 136-pixel head.
+ *
+ * This is a local copy; rig.js keeps its own 13-entry table so the shipping
+ * whole-frame sheets stay byte-identical.
+ */
+const HEAD_HALF = [5, 6, 7, 8, 8, 8, 8, 8, 7, 7, 6, 5, 4, 3];
 const CX = 15.5;
 
 const EAR = [
@@ -289,6 +300,8 @@ function buildHead_SE(variant) {
     [7, 11, 22], [8, 10, 23], [9, 10, 23], [10, 10, 23],
     [11, 10, 23], [12, 11, 23], [13, 11, 22], [14, 12, 22],
     [15, 12, 21], [16, 13, 20], [17, 14, 19],
+    // Neck stub overlapping the torso — see HEAD_HALF. Draw order hides it.
+    [18, 14, 19], [19, 15, 18],
   ];
   for (const [y, x0, x1] of skullSpans) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.HEAD);
@@ -352,9 +365,11 @@ function buildHead_E(variant) {
     [12, 15, 27],  // cheek; muzzle begins
     [13, 16, 28],  // muzzle full extension
     [14, 16, 28],
-    [15, 17, 27],  // jaw
-    [16, 18, 24],  // throat
-    [17, 19, 23],  // neck
+    [15, 17, 27],  // jaw — lands directly on the shoulder at y16
+    // No throat/neck rows here. A 7px row over a 5px row, under a 12px skull
+    // and above a 12px shoulder, is three consecutive rows below 8px — a 12px
+    // pencil neck at 4x, which read as a meerkat. The jaw now meets the
+    // shoulder in one transition instead of three.
   ];
   for (const [y, x0, x1] of skullSpans) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.HEAD);
@@ -398,6 +413,10 @@ function buildHead_NE(variant) {
     [7, 11, 22], [8, 10, 23], [9, 10, 23], [10, 10, 23],
     [11, 10, 23], [12, 10, 22], [13, 11, 22], [14, 12, 21],
     [15, 12, 21], [16, 13, 20], [17, 14, 19],
+    // Neck stub overlapping the torso — see HEAD_HALF. NE and NW were the two
+    // directions where nothing bridged the gap, so a lifted head flood-filled
+    // as a detached fragment.
+    [18, 14, 19], [19, 15, 18],
   ];
   for (const [y, x0, x1] of skullSpans) {
     fspan(y, x0, x1, SLOT.COAT_BASE, R.HEAD);
@@ -510,7 +529,7 @@ function buildBody_E(variant) {
   // Side view — elongated, rounder. Rises to a 6px neck at y17 so the wedge
   // skull sits on shoulders rather than balancing on the torso's top edge.
   const spans = [
-    [17, 17, 22], [18, 12, 23], [19, 9, 23], [20, 7, 23], [21, 6, 23],
+    [16, 16, 22], [17, 13, 23], [18, 12, 23], [19, 9, 23], [20, 7, 23], [21, 6, 23],
     [22, 5, 24], [23, 5, 24], [24, 5, 24], [25, 5, 24],
     [26, 5, 23], [27, 6, 23], [28, 6, 23], [29, 7, 22],
     [30, 8, 21],
@@ -617,11 +636,13 @@ function buildTail_E() {
   // almost all of it was painted underneath the torso — 0 visible pixels. A
   // tail that clears the silhouette is the strongest "cat, not duck" signal
   // available in profile, so it has to actually show.
+  // Tapers 5,5,5,4,4,4,4,4,3,3,2,2,2,1 — the profile rig.js uses. A constant
+  // 4-5px width over fifteen rows reads as a limb, not a tail.
   const spans = [
-    [27, 6, 9], [26, 5, 9], [25, 4, 8], [24, 4, 8],
-    [23, 3, 7], [22, 3, 7], [21, 2, 6], [20, 2, 6],
-    [19, 2, 5], [18, 2, 5], [17, 1, 4], [16, 1, 4],
-    [15, 2, 5], [14, 2, 5], [13, 3, 6],
+    [27, 5, 9], [26, 5, 9], [25, 4, 8], [24, 4, 7],
+    [23, 3, 6], [22, 3, 6], [21, 2, 5], [20, 2, 5],
+    [19, 2, 4], [18, 2, 4], [17, 2, 3], [16, 2, 3],
+    [15, 3, 4], [14, 4, 4],
   ];
   for (const [y, x0, x1] of spans) fspan(y, x0, x1, SLOT.COAT_BASE, REGION.TAIL);
   return cell;
@@ -631,11 +652,15 @@ function buildTail_NE() {
   const { cell, fspan } = makeBuilder('tail', 'NE');
   // Behind-and-left tail, raised clear of the back line. Same reasoning as
   // buildTail_E: below the body's top row it is simply painted over.
+  // Tapered like buildTail_E, and the shaft moved outboard to x2-x5. It used to
+  // sit at x3-x10 at constant 5-6px width, lying across a hip whose left edge
+  // is x6-x7 — 69 visible pixels, half the head's mass, drawn last so nothing
+  // occluded it. It read as a raised arm.
   const spans = [
-    [27, 6, 10], [26, 5, 10], [25, 5, 9], [24, 4, 9],
-    [23, 4, 8], [22, 3, 8], [21, 3, 7], [20, 3, 7],
-    [19, 2, 6], [18, 2, 6], [17, 2, 5], [16, 2, 5],
-    [15, 3, 6], [14, 3, 6],
+    [27, 4, 8], [26, 4, 8], [25, 3, 7], [24, 3, 6],
+    [23, 2, 5], [22, 2, 5], [21, 2, 5], [20, 2, 5],
+    [19, 2, 4], [18, 2, 4], [17, 2, 3], [16, 2, 3],
+    [15, 3, 4], [14, 4, 4],
   ];
   for (const [y, x0, x1] of spans) fspan(y, x0, x1, SLOT.COAT_BASE, REGION.TAIL);
   return cell;

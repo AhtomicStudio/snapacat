@@ -36,7 +36,10 @@ const RESOLVE = {
 const DRAW_ORDER = {
   S: ['tail', 'legBL', 'legBR', 'body', 'legFL', 'legFR', 'head'],
   SE: ['tail', 'legBL', 'legBR', 'body', 'legFL', 'legFR', 'head'],
-  E: ['legFL', 'legBL', 'tail', 'body', 'legBR', 'legFR', 'head'],
+  // In profile a cat's legs stand in FRONT of the torso silhouette; only the
+  // far pair is occluded by the near pair. Drawing the far legs before the body
+  // put them behind the barrel, where legFL rendered zero visible pixels.
+  E: ['tail', 'body', 'legFL', 'legBL', 'legBR', 'legFR', 'head'],
   NE: ['head', 'legFL', 'legFR', 'body', 'legBR', 'legBL', 'tail'],
   N: ['head', 'legFL', 'legFR', 'body', 'legBL', 'legBR', 'tail'],
 };

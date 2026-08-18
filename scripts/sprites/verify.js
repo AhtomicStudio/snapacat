@@ -1,0 +1,130 @@
+/**
+ * Composite-level invariants for directional frames.
+ *
+ * Every regression in the 8-direction work so far has been invisible to
+ * part-level tooling. `dump.js --parts` correctly reported all twenty legs
+ * painting healthy pixel counts while legFL in E rendered zero visible pixels,
+ * and it could not see that a 1px head lift detached the skull on twelve
+ * frames. The questions that matter are about the COMPOSED buffer:
+ *
+ *   - is the cat one connected shape?
+ *   - did every part survive occlusion?
+ *   - is the head still attached to the body?
+ *
+ * All three run in milliseconds across all 80 frames, so they belong in the
+ * build rather than in a review.
+ */
+const { FRAME_SIZE, idx } = require('./rig');
+const { SLOT } = require('./slots');
+const { PART_IDS, REGION } = require('./parts');
+
+/**
+ * Counts 8-connected components of non-empty pixels.
+ *
+ * 8-connected rather than 4-connected on purpose: pixel art routinely joins
+ * shapes diagonally, and treating a diagonal touch as a break would fire on
+ * art that reads as connected.
+ */
+function componentCount(buf) {
+  const seen = new Uint8Array(buf.length);
+  let components = 0;
+  let largest = 0;
+  const sizes = [];
+
+  for (let start = 0; start < buf.length; start++) {
+    if (buf[start] === SLOT.EMPTY || seen[start]) continue;
+    components++;
+    let size = 0;
+    const stack = [start];
+    seen[start] = 1;
+
+    while (stack.length) {
+      const i = stack.pop();
+      size++;
+      const x = i % FRAME_SIZE;
+      const y = (i / FRAME_SIZE) | 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= FRAME_SIZE || ny >= FRAME_SIZE) continue;
+          const n = idx(nx, ny);
+          if (seen[n] || buf[n] === SLOT.EMPTY) continue;
+          seen[n] = 1;
+          stack.push(n);
+        }
+      }
+    }
+    sizes.push(size);
+    if (size > largest) largest = size;
+  }
+
+  return { components, largest, sizes };
+}
+
+/** Visible pixel count per part id, after occlusion. */
+function visibleByPart(partBuf) {
+  const counts = {};
+  for (const id of PART_IDS) counts[id] = 0;
+  for (const v of partBuf) {
+    if (v === 0) continue;
+    counts[PART_IDS[v - 1]]++;
+  }
+  return counts;
+}
+
+/** Lowest head row and highest body row, from the region buffer. */
+function headBodyJoin(regionBuf) {
+  let headBottom = -1;
+  let bodyTop = Infinity;
+  for (let y = 0; y < FRAME_SIZE; y++) {
+    for (let x = 0; x < FRAME_SIZE; x++) {
+      const r = regionBuf[idx(x, y)];
+      if (r === REGION.HEAD || r === REGION.EAR || r === REGION.MUZZLE) {
+        if (y > headBottom) headBottom = y;
+      } else if (r === REGION.BODY) {
+        if (y < bodyTop) bodyTop = y;
+      }
+    }
+  }
+  return { headBottom, bodyTop };
+}
+
+/**
+ * Checks one composed frame. Returns an array of human-readable problems.
+ *
+ * `expectedParts` is the draw order for the direction — parts that are
+ * deliberately fully occluded (front legs behind the torso in a rear view) are
+ * passed via `allowHidden` rather than lowering the floor for everyone.
+ */
+function checkFrame(label, { buf, regionBuf, partBuf }, { allowHidden = [], minVisible = 5 } = {}) {
+  const problems = [];
+
+  const { components, sizes } = componentCount(buf);
+  if (components !== 1) {
+    problems.push(
+      `${label}: ${components} disconnected components (sizes ${sizes.sort((a, b) => b - a).join(', ')})`,
+    );
+  }
+
+  const visible = visibleByPart(partBuf);
+  for (const [partId, n] of Object.entries(visible)) {
+    if (n === 0 && !allowHidden.includes(partId)) {
+      problems.push(`${label}: ${partId} renders 0 visible pixels`);
+    } else if (n > 0 && n < minVisible && !allowHidden.includes(partId)) {
+      problems.push(`${label}: ${partId} renders only ${n} visible pixels`);
+    }
+  }
+
+  const { headBottom, bodyTop } = headBodyJoin(regionBuf);
+  if (headBottom >= 0 && bodyTop < Infinity && bodyTop - headBottom > 1) {
+    problems.push(
+      `${label}: head detached — head ends y${headBottom}, body starts y${bodyTop}`,
+    );
+  }
+
+  return problems;
+}
+
+module.exports = { checkFrame, componentCount, visibleByPart, headBodyJoin };

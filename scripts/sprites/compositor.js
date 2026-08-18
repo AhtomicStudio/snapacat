@@ -47,6 +47,12 @@ function compose(dir, animName, frameIdx, atlas) {
 
   const buf = makeFrame();
   const regionBuf = new Uint8Array(FRAME_SIZE * FRAME_SIZE);
+  // Which part owns each visible pixel, as 1-based indices into PART_IDS.
+  // Region tags cannot answer this — all four legs share REGION.LEG — and
+  // "which parts survived occlusion" is the question part-level tooling cannot
+  // answer at all: --parts reported every leg painting healthy counts while
+  // legFL in E rendered zero visible pixels.
+  const partBuf = new Uint8Array(FRAME_SIZE * FRAME_SIZE);
 
   for (const partId of drawOrder) {
     const anchor = anchors[partId];
@@ -76,6 +82,7 @@ function compose(dir, animName, frameIdx, atlas) {
         if (!inBounds(px, py)) continue;
         buf[idx(px, py)] = slot;
         regionBuf[idx(px, py)] = cell.regions[cy * cell.w + cx];
+        partBuf[idx(px, py)] = PART_IDS.indexOf(partId) + 1;
       }
     }
   }
@@ -88,6 +95,7 @@ function compose(dir, animName, frameIdx, atlas) {
         const r = idx(FRAME_SIZE - 1 - x, y);
         const tmpS = buf[l]; buf[l] = buf[r]; buf[r] = tmpS;
         const tmpR = regionBuf[l]; regionBuf[l] = regionBuf[r]; regionBuf[r] = tmpR;
+        const tmpP = partBuf[l]; partBuf[l] = partBuf[r]; partBuf[r] = tmpP;
       }
     }
   }
@@ -113,7 +121,7 @@ function compose(dir, animName, frameIdx, atlas) {
     ? { ...baseShadow, cx: FRAME_SIZE - 1 - baseShadow.cx }
     : { ...baseShadow };
 
-  return { buf, regionBuf, whiskers, shadow };
+  return { buf, regionBuf, partBuf, whiskers, shadow };
 }
 
 // ---------------------------------------------------------------------------

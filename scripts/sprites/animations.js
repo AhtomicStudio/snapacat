@@ -54,9 +54,12 @@ const DIR_ANIMATIONS = {
    * - **The body sits DOWN on contact and rises on passing.** That is the
    *   weight. Note contact legs use dy 0, not +1 — pushing the planted foot
    *   down put it on row y31, which is where the ground shadow lives.
-   * - **The head lags the body by one frame.** Bobbing them together reads as a
-   *   bounce; letting the head arrive late is the follow-through that reads as
-   *   mass.
+   * - **The head rides WITH the body; the tail carries the follow-through.**
+   *   Delaying the head by a frame does not produce lag — against a period-2
+   *   body bob it produces antiphase, a 2px relative excursion every ~160ms
+   *   that reads as a pigeon nod. Worse, lifting the head off a joint owned by
+   *   the torso opened a gap on 12 of 80 frames. The tail has the length to
+   *   carry a lag and no joint to break.
    */
   walk: {
     frames: [
@@ -64,25 +67,26 @@ const DIR_ANIMATIONS = {
       {
         legFL: { dx: 2, dy: 0 }, legBR: { dx: 2, dy: 0 },
         legFR: { dx: -2, dy: -1 }, legBL: { dx: -2, dy: -1 },
-        body: { dy: 0 }, head: { dy: -1 }, tail: { dx: 1 },
+        body: { dy: 0 }, head: { dy: 0 }, tail: { dx: 1, dy: 0 },
       },
       // Frame 1: left passing — body up, lifted pair at full clearance.
       {
         legFL: { dx: 0, dy: 0 }, legBR: { dx: 0, dy: 0 },
         legFR: { dx: 0, dy: -2 }, legBL: { dx: 0, dy: -2 },
-        body: { dy: -1 }, head: { dy: 0 }, tail: { dx: 0, dy: -1 },
+        body: { dy: -1 }, head: { dy: -1 }, tail: { dx: 0, dy: 0 },
       },
-      // Frame 2: right contact — the mirror of frame 0.
+      // Frame 2: right contact — the mirror of frame 0. The tail is a frame
+      // behind the body here, which is where the follow-through lives.
       {
         legFR: { dx: 2, dy: 0 }, legBL: { dx: 2, dy: 0 },
         legFL: { dx: -2, dy: -1 }, legBR: { dx: -2, dy: -1 },
-        body: { dy: 0 }, head: { dy: -1 }, tail: { dx: -1 },
+        body: { dy: 0 }, head: { dy: 0 }, tail: { dx: -1, dy: -1 },
       },
       // Frame 3: right passing.
       {
         legFR: { dx: 0, dy: 0 }, legBL: { dx: 0, dy: 0 },
         legFL: { dx: 0, dy: -2 }, legBR: { dx: 0, dy: -2 },
-        body: { dy: -1 }, head: { dy: 0 }, tail: { dx: 0, dy: -1 },
+        body: { dy: -1 }, head: { dy: -1 }, tail: { dx: 0, dy: -1 },
       },
     ],
     sequence: [0, 1, 2, 3],

@@ -371,6 +371,48 @@ const { ALL: ALL_DIRS } = require('./directions');
 const { DIR_ANIMATIONS, ANIM_ORDER, sheetLayout } = require('./animations');
 
 /**
+ * Checks the composed geometry once, before any sheet is written.
+ *
+ * Geometry does not vary by breed — only palette and pattern do — so this runs
+ * across all 8 directions x all animations x all frames a single time.
+ *
+ * Parts listed in ALLOW_HIDDEN are deliberately occluded: a cat facing away has
+ * its front legs behind the torso, and a cat facing you has its hind legs
+ * behind it. Naming them explicitly is better than lowering the floor for
+ * everything, because then a leg that vanishes by accident still fails.
+ */
+const ALLOW_HIDDEN = {
+  S: ['legBL', 'legBR'], SW: ['legBL', 'legBR'], SE: ['legBL', 'legBR'],
+  N: ['legFL', 'legFR'], NW: ['legFL', 'legFR'], NE: ['legFL', 'legFR'],
+  E: [], W: [],
+};
+
+function verifyDirFrames(atlas) {
+  const { compose } = require('./compositor');
+  const { checkFrame } = require('./verify');
+  const problems = [];
+
+  for (const dir of ALL_DIRS) {
+    for (const animName of ANIM_ORDER) {
+      const anim = DIR_ANIMATIONS[animName];
+      for (let f = 0; f < anim.frames.length; f++) {
+        const composed = compose(dir, animName, f, atlas);
+        problems.push(...checkFrame(`${dir}/${animName}[${f}]`, composed, {
+          allowHidden: ALLOW_HIDDEN[dir] ?? [],
+        }));
+      }
+    }
+  }
+
+  if (problems.length) {
+    console.warn(`\n⚠ ${problems.length} composite issue(s):`);
+    for (const p of problems) console.warn(`   ${p}`);
+    console.warn('');
+  }
+  return problems.length;
+}
+
+/**
  * Renders all directional frames for one breed and packs them into a sheet.
  * Layout: rows = directions (S,SE,E,NE,N,NW,W,SW), cols = animation frames
  * packed sequentially (idle frames, walk frames, sleep frames).
@@ -636,6 +678,7 @@ function main() {
 
   // ── Directional sheets (new, additive) ─────────────────────────────
   const atlas = buildPartAtlas();
+  verifyDirFrames(atlas);
   let totalDirCols = 0;
 
   for (const breed of breeds) {
