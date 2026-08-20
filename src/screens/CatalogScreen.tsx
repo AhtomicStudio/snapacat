@@ -22,9 +22,15 @@ export interface CatalogScreenProps {
   userId: string;
   onLogSpotting: () => void;
   onViewScrapbook: (cat: Cat) => void;
+  /**
+   * Returns to The Hood. Required now that the Cat-a-log is pushed over the
+   * scene rather than living in a tab bar — without it the screen is a dead
+   * end on any device without a hardware back gesture.
+   */
+  onBack?: () => void;
 }
 
-export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook }: CatalogScreenProps) {
+export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }: CatalogScreenProps) {
   const [cats, setCats] = useState<Cat[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -226,13 +232,29 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook }: Catalo
       <View
         className="flex-row justify-between items-center px-lg py-md border-b border-border bg-card-bg"
       >
-        <View>
-          <Text className="text-title font-bold text-text-primary font-display">
-            Cat-a-log
-          </Text>
-          <Text className="text-sm text-text-secondary font-sans mt-xs">
-            Spotted cats in the neighborhood
-          </Text>
+        <View className="flex-row items-center gap-md">
+          {onBack && (
+            <Pressable
+              onPress={onBack}
+              hitSlop={HIT_SLOP_MD}
+              accessibilityRole="button"
+              accessibilityLabel="Back to your Hood"
+              style={({ pressed }) => [
+                pressScale(pressed),
+                { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+              ]}
+            >
+              <Text className="text-ginger font-bold text-lg">←</Text>
+            </Pressable>
+          )}
+          <View>
+            <Text className="text-title font-bold text-text-primary font-display">
+              Cat-a-log
+            </Text>
+            <Text className="text-sm text-text-secondary font-sans mt-xs">
+              Spotted cats in the neighborhood
+            </Text>
+          </View>
         </View>
 
         {/* Primary CTA — scale + ginger button shadow */}

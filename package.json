@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "sprites": "node scripts/sprites/build.js"
+    "sprites": "node scripts/sprites/build.js",
+    "sprites:props": "node scripts/sprites/props.js",
+    "sprites:propsheet": "node scripts/sprites/propsheet.js"
   },
   "dependencies": {
     "@react-native-firebase/app": "^24.1.1",

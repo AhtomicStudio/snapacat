@@ -95,7 +95,6 @@ jest.mock('@react-native-firebase/storage', () => ({
 import React from 'react';
 import { CatalogScreen } from '../CatalogScreen';
 import { FieldNotesScreen } from '../FieldNotesScreen';
-import { HoodScreen } from '../HoodScreen';
 import { FriendHoodScreen } from '../FriendHoodScreen';
 
 jest.mock('@react-native-firebase/firestore', () => {
@@ -187,34 +186,12 @@ describe('Screens Render Tests', () => {
     });
   });
 
-  describe('HoodScreen', () => {
-    it('renders HoodScreen without crashing', () => {
-      const onUpdateHood = jest.fn();
-      const onBack = jest.fn();
-      const onUpdateProgression = jest.fn();
-
-      const element = HoodScreen({
-        hoodId: 'hood_test',
-        hood: {
-          name: 'Test Backyard',
-          custom_bg_url: null,
-          placed_items: ['item_toy_mouse'],
-        },
-        onUpdateHood,
-        onBack,
-        progression: {
-          paw_points: 0,
-          unlocked_themes: ['theme_default'],
-          unlocked_items: ['item_kibble_bowl', 'item_toy_mouse', 'item_cardboard_box', 'item_catnip_plant'],
-          active_theme_id: null,
-        },
-        onUpdateProgression,
-        userId: 'user_test',
-      });
-
-      expect(element).toBeDefined();
-    });
-  });
+  // HoodScreen was replaced by HoodHomeScreen, which is not callable as a plain
+  // function the way this suite calls the others: it reads safe-area insets and
+  // window dimensions from context. Its behaviour is covered instead by
+  // config/__tests__/scene.test.ts, which tests the layout maths directly —
+  // more useful than a smoke test that only asserts a component returned
+  // something.
 
   describe('FriendHoodScreen', () => {
     it('renders FriendHoodScreen without crashing', () => {
