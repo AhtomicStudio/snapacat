@@ -123,15 +123,20 @@
       </div>
     </div>
 
-    <!-- A hint slot: tells you WHERE to look, which turns the empty slot
-         from a scold into a lead. -->
+    <!--
+      This slot originally read "Likes shelter". It was cut before shipping,
+      because it would have been a lie: spawn chances come from item bonuses
+      alone, with no per-breed affinity anywhere in the game. A hint the game
+      does not honour is worse than no hint. utils/collection.describeEntry is
+      the single place to change once breed affinity actually exists.
+    -->
     <div style="background: #F3EDE4; border: 1.5px dashed #DCD3C6; border-radius: 20px; overflow: hidden;">
       <div style="height: 92px; display: flex; align-items: flex-end; justify-content: center;">
-        <div class="px" style="width: 74px; height: 74px; background-image: url(./cat_sealpoint.png); background-size: 444px 74px; background-position: 0 0; margin-bottom: 4px; filter: brightness(0) opacity(.16);"></div>
+        <div class="px" style="width: 74px; height: 74px; background-image: url(./cat_sealpoint.png); background-size: 444px 74px; background-position: 0 0; margin-bottom: 4px; filter: brightness(0) opacity(.22);"></div>
       </div>
       <div style="padding: 8px 9px 10px;">
         <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 11.5px; font-weight: 700; color: #A49E98;">?????</div>
-        <div style="font-size: 10.5px; color: #C08A4E; margin-top: 2px;">Likes shelter</div>
+        <div style="font-size: 10.5px; color: #B7B0A7; margin-top: 2px;">Not yet met</div>
       </div>
     </div>
 

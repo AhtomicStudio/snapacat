@@ -42,7 +42,7 @@
       "x": 1350,
       "y": -196,
       "w": 390,
-      "text": "CAT-A-LOG — the biggest structural change\n\nToday it lists cats you already have, which is a database view. A collection game runs on the EMPTY slots: silhouettes of breeds you have not met are what make the next cat worth chasing.\n\nThis reframes the index around the 20 breeds, with your named cats inside each. Worth discussing before I build it — it touches the data model."
+      "text": "CAT-A-LOG — SHIPPED\n\nIt used to list cats you already had, which is a database view. A collection game runs on the EMPTY slots: silhouettes of breeds you have not met are what make the next cat worth chasing.\n\nNo schema change was needed after all — breeds come from the local sprite library and cats already carry sprite_template_id, so the grouping is derived client-side.\n\nOne thing was cut: the 'Likes shelter' hint. Spawn chances come from item bonuses alone with no per-breed affinity, so it would have been a lie."
     },
     {
       "id": "note-shop",
