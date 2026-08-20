@@ -38,7 +38,7 @@ import { EnvironmentCard } from '../components/EnvironmentCard';
 import { ShopItemCard } from '../components/ShopItemCard';
 import { CARD_SHADOW, HIT_SLOP_MD } from '../utils/styles';
 import { Touchable } from '../components/Touchable';
-import { color, space, radius, weight, TAP_MIN } from '../theme';
+import { font, color, space, radius, TAP_MIN } from '../theme';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -127,7 +127,7 @@ function TabBar({
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: isActive ? '700' : '500',
+                fontFamily: isActive ? font.bold : font.medium,
                 color: isActive ? '#2C2A29' : '#706B67',
               }}
             >
@@ -181,7 +181,7 @@ function ItemFilterBar({
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: '700',
+                fontFamily: font.bold,
                 color: isActive ? '#FFFFFF' : '#706B67',
               }}
             >
@@ -364,7 +364,7 @@ export function ShopScreen({
         }}
       >
         <View>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>
+          <Text style={{ fontSize: 20, fontFamily: font.bold, color: '#2C2A29' }}>
             🛍 Shop
           </Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>
@@ -389,7 +389,7 @@ export function ShopScreen({
             ]}
           >
             <Text style={{ fontSize: 14 }}>🐾</Text>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+            <Text style={{ fontSize: 15, fontFamily: font.bold, color: '#FFFFFF' }}>
               {progression.paw_points}
             </Text>
           </View>
@@ -531,7 +531,7 @@ export function ShopScreen({
             borderColor: color.borderSoft,
           }}
         >
-          <Text style={{ fontSize: 15, fontWeight: weight.bold, color: color.textSecondary }}>
+          <Text style={{ fontSize: 15, fontFamily: font.bold, color: color.textSecondary }}>
             Done
           </Text>
         </Touchable>

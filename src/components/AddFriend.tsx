@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { addFriend } from '../services/dbService';
 import { Touchable } from './Touchable';
-import { color, space, radius, shadow, fontSize, weight, TAP_MIN } from '../theme';
+import { font, color, space, radius, shadow, fontSize, TAP_MIN } from '../theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   field: { gap: space.xs },
   label: {
     fontSize: fontSize.sm,
-    fontWeight: weight.semibold,
+    fontFamily: font.medium,
     color: color.textPrimary,
   },
   input: {
@@ -152,6 +152,6 @@ const styles = StyleSheet.create({
   },
   submitEnabled: { backgroundColor: color.ginger, ...shadow.button },
   submitDisabled: { backgroundColor: color.gingerLight },
-  submitText: { color: color.milk, fontWeight: weight.bold, fontSize: fontSize.sm },
+  submitText: { color: color.milk, fontFamily: font.bold, fontSize: fontSize.sm },
   submitTextDisabled: { color: color.gingerDark },
 });

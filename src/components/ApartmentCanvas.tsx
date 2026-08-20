@@ -12,7 +12,7 @@ import { Animated, Easing, View, Text, Pressable } from 'react-native';
 import { APARTMENT_SLOTS } from '../config/apartment';
 import { PLACEABLE_ITEMS, MAX_HOOD_CATS } from '../utils/spawnCalculator';
 import { CatSprite } from './CatSprite';
-import { color, space, radius, fontSize, weight } from '../theme';
+import { font, color, space, radius, fontSize } from '../theme';
 
 // ---------------------------------------------------------------------------
 // CatSlot
@@ -413,7 +413,7 @@ export function ApartmentCanvas({
                 opacity: pulse,
               }}
             >
-              <Text style={{ fontSize: 17, color: isNight ? 'rgba(255,255,255,0.8)' : '#E67035', fontWeight: '600' }}>+</Text>
+              <Text style={{ fontSize: 17, color: isNight ? 'rgba(255,255,255,0.8)' : '#E67035', fontFamily: font.medium}}>+</Text>
             </Animated.View>
           </Pressable>
         );
@@ -452,14 +452,14 @@ export function ApartmentCanvas({
         {readOnly ? (
           <>
             <Text style={{ fontSize: 12 }}>👁</Text>
-            <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textSecondary }}>
+            <Text style={{ fontSize: fontSize.xs, fontFamily: font.bold, color: color.textSecondary }}>
               View only
             </Text>
           </>
         ) : (
           <>
             <Text style={{ fontSize: 12 }}>🐱</Text>
-            <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textPrimary }}>
+            <Text style={{ fontSize: fontSize.xs, fontFamily: font.bold, color: color.textPrimary }}>
               {expectedCats}/{MAX_HOOD_CATS}
             </Text>
           </>

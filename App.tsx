@@ -33,6 +33,7 @@ import {
   type SnapErrorCode,
 } from './src/utils/errorCodes';
 import type { User, Cat, Hood, UserProgression } from './src/types';
+import { font } from './src/theme';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Screen state machine
@@ -181,7 +182,7 @@ export default function App() {
           style={{ flex: 1, backgroundColor: '#FAF6F0', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 40 }}
         >
           <Text style={{ fontSize: 46, marginBottom: 16 }}>🙀</Text>
-          <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29', textAlign: 'center' }}>
+          <Text style={{ fontSize: 18, fontFamily: font.bold, color: '#2C2A29', textAlign: 'center' }}>
             {ERROR_CODES[bootError].title}
           </Text>
           <Text style={{ marginTop: 8, fontSize: 13, color: '#706B67', textAlign: 'center', lineHeight: 20 }}>
@@ -214,7 +215,7 @@ export default function App() {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 15 }}>Try Again</Text>
+            <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 15 }}>Try Again</Text>
           </Touchable>
         </SafeAreaView>
       </SafeAreaProvider>
@@ -421,7 +422,7 @@ function FirstHoodScreen({ onCreate }: { onCreate: (name: string) => Promise<voi
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#FAF6F0', justifyContent: 'center', paddingHorizontal: 32 }}>
       <Text style={{ fontSize: 52, textAlign: 'center' }}>🏡</Text>
-      <Text style={{ fontSize: 24, fontWeight: '800', color: '#2C2A29', textAlign: 'center', marginTop: 14 }}>
+      <Text style={{ fontSize: 24, fontFamily: font.bold, color: '#2C2A29', textAlign: 'center', marginTop: 14 }}>
         Where do you see cats?
       </Text>
       <Text style={{ fontSize: 13, color: '#706B67', textAlign: 'center', marginTop: 8, lineHeight: 20 }}>
@@ -464,7 +465,7 @@ function FirstHoodScreen({ onCreate }: { onCreate: (name: string) => Promise<voi
           opacity: !name.trim() || busy ? 0.45 : 1,
         }}
       >
-        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 15 }}>
+        <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 15 }}>
           {busy ? 'Setting up…' : 'Open the gate'}
         </Text>
       </Touchable>
@@ -518,7 +519,7 @@ function StreakToast({ count, onDone }: { count: number; onDone: () => void }) {
     >
       <Text style={{ fontSize: 22 }}>{count > 1 ? '🔥' : '🐾'}</Text>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: '800', color: '#2C2A29' }}>
+        <Text style={{ fontSize: 14, fontFamily: font.bold, color: '#2C2A29' }}>
           {count > 1 ? `Day ${count} streak!` : 'Welcome back!'}
         </Text>
         <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>

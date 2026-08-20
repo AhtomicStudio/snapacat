@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Touchable } from './Touchable';
-import { color, radius, shadow, space } from '../theme';
+import { font, color, radius, shadow, space } from '../theme';
 import type { EnvironmentPreset } from '../types';
 import { pressScale, CARD_SHADOW } from '../utils/styles';
 
@@ -64,7 +64,7 @@ export function EnvironmentCard({
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <Text
-            style={{ fontSize: 15, fontWeight: '700', color: '#2C2A29' }}
+            style={{ fontSize: 15, fontFamily: font.bold, color: '#2C2A29' }}
             numberOfLines={1}
           >
             {env.name}
@@ -79,7 +79,7 @@ export function EnvironmentCard({
               paddingVertical: 2,
             }}
           >
-            <Text style={{ fontSize: 10, fontWeight: '700', color: '#92400E' }}>
+            <Text style={{ fontSize: 10, fontFamily: font.bold, color: '#92400E' }}>
               {env.bonus_tag}
             </Text>
           </View>
@@ -97,7 +97,7 @@ export function EnvironmentCard({
               <Text
                 style={{
                   fontSize: 10,
-                  fontWeight: '600',
+                  fontFamily: font.medium,
                   color: env.forced_time_of_day === 'night' ? '#FFFFFF' : '#0369A1',
                 }}
               >
@@ -128,7 +128,7 @@ export function EnvironmentCard({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: font.bold}}>✓</Text>
           </View>
         ) : isOwned ? (
           <View
@@ -139,7 +139,7 @@ export function EnvironmentCard({
               paddingVertical: 4,
             }}
           >
-            <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>
+            <Text style={{ fontSize: 11, fontFamily: font.bold, color: '#16A34A' }}>
               {isFree ? 'Free' : 'Owned'}
             </Text>
           </View>
@@ -155,7 +155,7 @@ export function EnvironmentCard({
             <Text
               style={{
                 fontSize: 11,
-                fontWeight: '700',
+                fontFamily: font.bold,
                 color: canAfford ? '#6D4FC2' : '#706B67',
               }}
             >

@@ -17,7 +17,7 @@ import {
 } from '../utils/socialUtils';
 import { CARD_SHADOW, HIT_SLOP_MD } from '../utils/styles';
 import { Touchable } from '../components/Touchable';
-import { color, space, radius, fontSize, weight, TAP_MIN } from '../theme';
+import { font, color, space, radius, fontSize, TAP_MIN } from '../theme';
 
 // ---------------------------------------------------------------------------
 // Props & local types
@@ -115,10 +115,10 @@ export function FriendsScreen({
             marginLeft: -space.sm,
           }}
         >
-          <Text style={{ color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg }}>←</Text>
+          <Text style={{ color: color.ginger, fontFamily: font.bold, fontSize: fontSize.lg }}>←</Text>
         </Touchable>
         <View>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>Friends</Text>
+          <Text style={{ fontSize: 20, fontFamily: font.bold, color: '#2C2A29' }}>Friends</Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>
             {loading ? '…' : `${friends.length} ${friends.length === 1 ? 'friend' : 'friends'}`}
           </Text>
@@ -138,14 +138,14 @@ export function FriendsScreen({
             also repeated the heading, so "Add a Friend" appeared twice in a
             row — gave the section a card inside a card with two paddings.
           */}
-          <Text style={{ fontSize: fontSize.lg, fontWeight: weight.heavy, color: color.textPrimary, marginBottom: 14 }}>
+          <Text style={{ fontSize: fontSize.lg, fontFamily: font.bold, color: color.textPrimary, marginBottom: 14 }}>
             Add a Friend
           </Text>
           <AddFriend currentUid={currentUid} onFriendAdded={handleFriendAdded} />
         </View>
 
         {/* ── Friends list ─────────────────────────────────────────────────── */}
-        <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29', marginBottom: 14 }}>
+        <Text style={{ fontSize: 18, fontFamily: font.bold, color: '#2C2A29', marginBottom: 14 }}>
           Your Friends
         </Text>
 
@@ -173,7 +173,7 @@ export function FriendsScreen({
             ]}
           >
             <Text style={{ fontSize: 36, marginBottom: 12 }}>👥</Text>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#2C2A29' }}>
+            <Text style={{ fontSize: 16, fontFamily: font.bold, color: '#2C2A29' }}>
               No friends yet
             </Text>
             <Text
@@ -198,7 +198,7 @@ export function FriendsScreen({
         {/* ── Activity feed ────────────────────────────────────────────────── */}
         {!loading && activities.length > 0 && (
           <>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29', marginBottom: 14 }}>
+            <Text style={{ fontSize: 18, fontFamily: font.bold, color: '#2C2A29', marginBottom: 14 }}>
               Recent Activity
             </Text>
             {activities.map((activity) => (
@@ -261,7 +261,7 @@ function FriendCard({
 
       {/* Info */}
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 15, fontWeight: '700', color: '#2C2A29' }}>
+        <Text style={{ fontSize: 15, fontFamily: font.bold, color: '#2C2A29' }}>
           {friend.username}
         </Text>
         <Text style={{ fontSize: 12, color: '#706B67', marginTop: 2 }}>
@@ -285,7 +285,7 @@ function FriendCard({
           justifyContent: 'center',
         }}
       >
-        <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.gingerDark }}>
+        <Text style={{ fontSize: fontSize.xs, fontFamily: font.bold, color: color.gingerDark }}>
           Visit 🏡
         </Text>
       </Touchable>
@@ -331,7 +331,7 @@ function ActivityCard({ activity }: { activity: FriendActivity }) {
       {/* Description */}
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 13, color: '#2C2A29', lineHeight: 18 }}>
-          <Text style={{ fontWeight: '700' }}>{activity.username}</Text>
+          <Text style={{ fontFamily: font.bold}}>{activity.username}</Text>
           {' '}{formatActivityText(activity)}
         </Text>
         <Text style={{ fontSize: 11, color: '#706B67', marginTop: 4 }}>

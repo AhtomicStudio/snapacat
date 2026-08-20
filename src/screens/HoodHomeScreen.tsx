@@ -72,6 +72,7 @@ import {
 } from '../utils/hoodMood';
 import { getSpriteById, RARITY_LABELS, RARITY_STARS } from '../utils/spriteLibrary';
 import { getPropSheet } from '../assets/props';
+import { font } from '../theme';
 
 const SURFACE = '#FAF6F0';
 const INK = '#2C2A29';
@@ -251,7 +252,7 @@ function TrayItem({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>{count}</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 11, fontFamily: font.bold}}>{count}</Text>
           </View>
         )}
       </View>
@@ -259,7 +260,7 @@ function TrayItem({
         numberOfLines={2}
         style={{
           fontSize: 10,
-          fontWeight: '600',
+          fontFamily: font.medium,
           color: INK,
           textAlign: 'center',
           marginTop: 6,
@@ -552,7 +553,7 @@ export function HoodHomeScreen({
             <Text style={{ fontSize: 15 }}>{activeEnv.icon}</Text>
             <Text
               numberOfLines={1}
-              style={{ fontSize: 14, fontWeight: '800', color: dark ? '#F2F3FF' : INK, flexShrink: 1 }}
+              style={{ fontSize: 14, fontFamily: font.bold, color: dark ? '#F2F3FF' : INK, flexShrink: 1 }}
             >
               {hood.name}
             </Text>
@@ -563,13 +564,13 @@ export function HoodHomeScreen({
         <View style={{ alignItems: 'flex-end', gap: 8 }}>
           <GlassPill dark={dark}>
             <Text style={{ fontSize: 13 }}>🐾</Text>
-            <Text style={{ fontSize: 13, fontWeight: '800', color: dark ? '#F2F3FF' : INK }}>
+            <Text style={{ fontSize: 13, fontFamily: font.bold, color: dark ? '#F2F3FF' : INK }}>
               {progression.paw_points}
             </Text>
           </GlassPill>
           <GlassPill dark={dark}>
             <Text style={{ fontSize: 12 }}>{ambience.icon}</Text>
-            <Text style={{ fontSize: 11, fontWeight: '700', color: dark ? '#A9B2D8' : MUTED }}>
+            <Text style={{ fontSize: 11, fontFamily: font.bold, color: dark ? '#A9B2D8' : MUTED }}>
               {ambience.label}
             </Text>
           </GlassPill>
@@ -633,7 +634,7 @@ export function HoodHomeScreen({
         background={SURFACE}
         peek={
           <View style={{ paddingHorizontal: 22, paddingBottom: insets.bottom }}>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: INK }}>{activityLine}</Text>
+            <Text style={{ fontSize: 15, fontFamily: font.bold, color: INK }}>{activityLine}</Text>
             <Text style={{ fontSize: 12, color: MUTED, marginTop: 3 }} numberOfLines={1}>
               {attractionLine ?? `Pull up to decorate ${hood.name}`}
             </Text>
@@ -653,9 +654,9 @@ export function HoodHomeScreen({
               marginBottom: 4,
             }}
           >
-            <Text style={{ fontSize: 19, fontWeight: '800', color: INK }}>Put something out</Text>
+            <Text style={{ fontSize: 19, fontFamily: font.bold, color: INK }}>Put something out</Text>
             <Touchable onPress={() => setShowShop(true)} hitSlop={HIT_SLOP_MD} scaleTo={0.95}>
-              <Text style={{ fontSize: 13, fontWeight: '800', color: '#E67035' }}>Shop ›</Text>
+              <Text style={{ fontSize: 13, fontFamily: font.bold, color: '#E67035' }}>Shop ›</Text>
             </Touchable>
           </View>
           <Text style={{ fontSize: 12, color: MUTED, marginBottom: 14, lineHeight: 18 }}>
@@ -763,7 +764,7 @@ export function HoodHomeScreen({
                 backgroundColor: '#EAE3DA', alignSelf: 'center', marginBottom: 14,
               }}
             />
-            <Text style={{ fontSize: 18, fontWeight: '800', color: INK }}>
+            <Text style={{ fontSize: 18, fontFamily: font.bold, color: INK }}>
               {pickerSlotId ? getSlotById(pickerSlotId)?.label ?? '' : ''}
             </Text>
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 14 }}>
@@ -848,11 +849,11 @@ function CatCard({
             <Text style={{ fontSize: 76 }}>🐱</Text>
           )}
 
-          <Text style={{ fontSize: 19, fontWeight: '800', color: INK, marginTop: 12, textAlign: 'center' }}>
+          <Text style={{ fontSize: 19, fontFamily: font.bold, color: INK, marginTop: 12, textAlign: 'center' }}>
             {def?.label ?? 'A visitor'}
           </Text>
           {def && (
-            <Text style={{ fontSize: 12, color: '#E8A020', marginTop: 3, fontWeight: '700' }}>
+            <Text style={{ fontSize: 12, color: '#E8A020', marginTop: 3, fontFamily: font.bold}}>
               {RARITY_STARS[def.rarity]} {RARITY_LABELS[def.rarity]}
             </Text>
           )}
@@ -878,7 +879,7 @@ function CatCard({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>
+            <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 14 }}>
               Open the Cat-a-log
             </Text>
           </Touchable>
@@ -959,7 +960,7 @@ function HoodSwitcher({
 
           {naming ? (
             <>
-              <Text style={{ fontSize: 19, fontWeight: '800', color: INK }}>A new spot</Text>
+              <Text style={{ fontSize: 19, fontFamily: font.bold, color: INK }}>A new spot</Text>
               <Text style={{ fontSize: 12, color: MUTED, marginTop: 4, lineHeight: 18 }}>
                 Name somewhere you see cats. No GPS — just a label you'll recognise.
               </Text>
@@ -995,7 +996,7 @@ function HoodSwitcher({
                     backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAE3DA',
                   }}
                 >
-                  <Text style={{ fontWeight: '700', color: MUTED, fontSize: 14 }}>Cancel</Text>
+                  <Text style={{ fontFamily: font.bold, color: MUTED, fontSize: 14 }}>Cancel</Text>
                 </Touchable>
                 <Touchable
                   onPress={submit}
@@ -1007,7 +1008,7 @@ function HoodSwitcher({
                     opacity: !draftName.trim() || busy ? 0.45 : 1,
                   }}
                 >
-                  <Text style={{ fontWeight: '800', color: '#FFFFFF', fontSize: 14 }}>
+                  <Text style={{ fontFamily: font.bold, color: '#FFFFFF', fontSize: 14 }}>
                     {busy ? 'Creating…' : 'Create'}
                   </Text>
                 </Touchable>
@@ -1015,7 +1016,7 @@ function HoodSwitcher({
             </>
           ) : (
             <>
-              <Text style={{ fontSize: 19, fontWeight: '800', color: INK, marginBottom: 12 }}>
+              <Text style={{ fontSize: 19, fontFamily: font.bold, color: INK, marginBottom: 12 }}>
                 Where to?
               </Text>
               <ScrollView showsVerticalScrollIndicator={false}>
@@ -1041,11 +1042,11 @@ function HoodSwitcher({
                     >
                       <Text style={{ fontSize: 24 }}>{env.icon}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 16, fontWeight: '700', color: INK }}>{h.name}</Text>
+                        <Text style={{ fontSize: 16, fontFamily: font.bold, color: INK }}>{h.name}</Text>
                         <Text style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{env.name}</Text>
                       </View>
                       {active && (
-                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#E67035' }}>Here</Text>
+                        <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#E67035' }}>Here</Text>
                       )}
                     </Touchable>
                   );
@@ -1063,7 +1064,7 @@ function HoodSwitcher({
                     borderColor: 'rgba(255,142,83,0.5)',
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#E67035' }}>
+                  <Text style={{ fontSize: 14, fontFamily: font.bold, color: '#E67035' }}>
                     + Somewhere new
                   </Text>
                 </Touchable>

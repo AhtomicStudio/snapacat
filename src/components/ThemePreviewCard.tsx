@@ -6,7 +6,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import type { Theme } from '../types';
 import { Touchable } from './Touchable';
-import { color, radius, shadow, space } from '../theme';
+import { font, color, radius, shadow, space } from '../theme';
 
 interface ThemePreviewCardProps {
   theme: Theme;
@@ -93,7 +93,7 @@ export function ThemePreviewCard({
               justifyContent: 'center',
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>✓</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 14, fontFamily: font.bold}}>✓</Text>
           </View>
         )}
       </View>
@@ -102,7 +102,7 @@ export function ThemePreviewCard({
       <View style={{ padding: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text
-            style={{ fontSize: 15, fontWeight: '700', color: '#2C2A29', flex: 1 }}
+            style={{ fontSize: 15, fontFamily: font.bold, color: '#2C2A29', flex: 1 }}
             numberOfLines={1}
           >
             {theme.name}
@@ -118,7 +118,7 @@ export function ThemePreviewCard({
                 paddingVertical: 4,
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#16A34A' }}>
+              <Text style={{ fontSize: 11, fontFamily: font.bold, color: '#16A34A' }}>
                 {isFree ? 'Free' : 'Owned'}
               </Text>
             </View>
@@ -134,7 +134,7 @@ export function ThemePreviewCard({
               <Text
                 style={{
                   fontSize: 11,
-                  fontWeight: '700',
+                  fontFamily: font.bold,
                   color: canAfford ? COST_BADGE_TEXT : '#706B67',
                 }}
               >
@@ -165,7 +165,7 @@ export function ThemePreviewCard({
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: '700',
+                fontFamily: font.bold,
                 color: canAfford ? '#FFFFFF' : '#706B67',
               }}
             >
@@ -184,7 +184,7 @@ export function ThemePreviewCard({
               alignItems: 'center',
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#E67035' }}>
+            <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#E67035' }}>
               Apply Theme
             </Text>
           </View>

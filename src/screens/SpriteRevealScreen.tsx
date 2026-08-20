@@ -18,7 +18,7 @@ import {
   SPRITE_LIBRARY,
 } from '../utils/spriteLibrary';
 import { Touchable } from '../components/Touchable';
-import { color, radius, shadow } from '../theme';
+import { font, color, radius, shadow } from '../theme';
 
 type RevealPhase = 'analyzing' | 'revealed';
 
@@ -216,7 +216,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
         >
           <Animated.Text style={{ fontSize: 60, transform: [{ rotate: spin }] }}>🐾</Animated.Text>
           <Animated.Text
-            style={{ color: '#FFFFFF', fontSize: 19, fontWeight: '800', marginTop: 28, opacity: scanPulse }}
+            style={{ color: '#FFFFFF', fontSize: 19, fontFamily: font.bold, marginTop: 28, opacity: scanPulse }}
           >
             Cataloguing your cat...
           </Animated.Text>
@@ -265,7 +265,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
                 }),
               }}
             >
-              <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 3 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 10, fontFamily: font.bold, letterSpacing: 3 }}>
                 {sprite.rarity === 'rare' ? '★ RARE FIND ★'
                   : sprite.rarity === 'uncommon' ? 'UNCOMMON SPOTTING'
                   : 'CAT TYPE IDENTIFIED'}
@@ -328,7 +328,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
                   paddingHorizontal: 10, paddingVertical: 4,
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '700', letterSpacing: 1.2 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 9, fontFamily: font.bold, letterSpacing: 1.2 }}>
                   {PATTERN_LABELS[sprite.pattern].toUpperCase()}
                 </Text>
               </View>
@@ -336,7 +336,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
 
             {/* Card body */}
             <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 22, paddingTop: 18, paddingBottom: 22 }}>
-              <Text style={{ fontSize: 23, fontWeight: '900', color: '#2C2A29', textAlign: 'center' }}>
+              <Text style={{ fontSize: 23, fontFamily: font.bold, color: '#2C2A29', textAlign: 'center' }}>
                 {sprite.label}
               </Text>
 
@@ -393,7 +393,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
                 ...shadow.button,
               }}
             >
-              <Text style={{ color: color.milk, fontWeight: '900', fontSize: 17, letterSpacing: 0.3 }}>
+              <Text style={{ color: color.milk, fontFamily: font.bold, fontSize: 17, letterSpacing: 0.3 }}>
                 Log This Sighting →
               </Text>
             </Touchable>

@@ -88,15 +88,35 @@ export const radius = {
 /**
  * Font families.
  *
- * These names only resolve once the font files are linked (see
- * docs/pixel-animation-pipeline.md §8). Until then every one of them falls
- * back to the platform default, which is why the app currently renders in
- * Roboto despite the tokens asking for Quicksand. Kept named rather than
- * silently dropped so linking the fonts is a one-file change.
+ * Quicksand, three static weights, shipped in src/assets/fonts and copied into
+ * android/app/src/main/assets/fonts. OFL licensed; the licence travels with the
+ * files.
+ *
+ * WHY ONE FAMILY
+ *
+ * The tokens originally named Quicksand for display and Outfit/Nunito for body.
+ * Google now publishes both of those as VARIABLE fonts only, and React Native
+ * on Android cannot instance a variable axis — it picks one file per family and
+ * renders its default weight. Rather than ship a body face stuck at 400 and
+ * pretend the ramp works, this is one family with three real static weights,
+ * which is a complete ramp on its own and half the payload.
+ *
+ * WHY THESE NAMES LOOK ODD
+ *
+ * Android resolves fontFamily by the FILENAME, not by the family name recorded
+ * inside the TTF. `Quicksand-Bold.ttf` is reachable only as
+ * `fontFamily: 'Quicksand-Bold'`; asking for `fontFamily: 'Quicksand'` plus
+ * `fontWeight: '700'` silently falls back to the system face. So every weight
+ * is named here, and NOTHING that sets one of these families may also set
+ * fontWeight — see `text` below, where the weights are gone for that reason.
  */
 export const font = {
-  display: 'Quicksand',
-  sans: 'Outfit',
+  /** Body copy. */
+  regular: 'Quicksand-Regular',
+  /** Labels, emphasis, anything that needs to sit above body without shouting. */
+  medium: 'Quicksand-Medium',
+  /** Headings, buttons, numbers you want read first. */
+  bold: 'Quicksand-Bold',
 } as const;
 
 export const fontSize = {
@@ -109,50 +129,59 @@ export const fontSize = {
   title: 32,
 } as const;
 
-export const weight = {
-  regular: '400',
-  medium: '500',
-  semibold: '600',
-  bold: '700',
-  heavy: '800',
-} as const satisfies Record<string, TextStyle['fontWeight']>;
+/**
+ * There is deliberately no `weight` token.
+ *
+ * `fontWeight` does not compose with a custom family on Android — setting both
+ * makes the text silently fall back to Roboto. Weight is selected by picking a
+ * `font.*` family above, which is why that export names three weights rather
+ * than one family. If you find yourself reaching for a weight here, you want
+ * `fontFamily: font.medium` or `font.bold`.
+ */
 
 /**
  * Ready-made text styles.
  *
+ * Weight is carried by `fontFamily`, never by `fontWeight` — see the note on
+ * `font` above. Setting both would make Android quietly drop back to Roboto.
+ *
  * Line heights are set explicitly. React Native's default leading is tight
  * enough that multi-line body copy reads as a block, and it differs between
  * platforms — so it is never left to the default on anything that can wrap.
+ * Quicksand has a lower x-height than Roboto, so these run slightly looser
+ * than they did.
  */
 export const text = {
   title: {
+    fontFamily: font.bold,
     fontSize: fontSize.title,
-    fontWeight: weight.heavy,
     color: color.textPrimary,
   },
   heading: {
+    fontFamily: font.bold,
     fontSize: fontSize.xl,
-    fontWeight: weight.heavy,
     color: color.textPrimary,
   },
   subheading: {
+    fontFamily: font.bold,
     fontSize: fontSize.lg,
-    fontWeight: weight.bold,
     color: color.textPrimary,
   },
   body: {
+    fontFamily: font.regular,
     fontSize: fontSize.sm,
     color: color.textPrimary,
-    lineHeight: 20,
+    lineHeight: 21,
   },
   secondary: {
+    fontFamily: font.regular,
     fontSize: fontSize.xs,
     color: color.textSecondary,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   label: {
+    fontFamily: font.bold,
     fontSize: fontSize.xs,
-    fontWeight: weight.bold,
     color: color.textSecondary,
   },
 } as const satisfies Record<string, TextStyle>;

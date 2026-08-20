@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCats, createCat, addScrapbookEntry, saveUserProgression } from '../services/dbService';
 import { CARD_SHADOW, BUTTON_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/styles';
 import { Touchable } from '../components/Touchable';
-import { color, space, radius, shadow, fontSize, weight, TAP_MIN } from '../theme';
+import { font, color, space, radius, shadow, fontSize, TAP_MIN } from '../theme';
 import type { CatGender, HexColor, UserProgression } from '../types';
 import type { RGB } from '../utils/colorExtractor';
 import { awardPawPoints, PAW_POINT_REWARDS } from '../utils/progressionEngine';
@@ -196,10 +196,10 @@ export function FieldNotesScreen({
               </View>
             )}
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#2C2A29' }}>📸 Photo captured</Text>
+              <Text style={{ fontSize: 13, fontFamily: font.bold, color: '#2C2A29' }}>📸 Photo captured</Text>
               {onRetakePhoto && (
                 <Pressable onPress={onRetakePhoto} hitSlop={HIT_SLOP_MD}>
-                  <Text style={{ fontSize: 12, color: '#E67035', fontWeight: '700' }}>Retake →</Text>
+                  <Text style={{ fontSize: 12, color: '#E67035', fontFamily: font.bold}}>Retake →</Text>
                 </Pressable>
               )}
             </View>
@@ -265,7 +265,7 @@ export function FieldNotesScreen({
         {matchedSpriteId && !overridePicker ? (
           // Auto-matched result from SpriteRevealScreen
           <View style={[GROUP_CARD, { paddingBottom: 14 }]}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#706B67', marginBottom: 10 }}>
+            <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#706B67', marginBottom: 10 }}>
               Sprite Signature Look
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
@@ -281,7 +281,7 @@ export function FieldNotesScreen({
                 <Text style={{ fontSize: 24 }}>🐱</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#2C2A29' }}>
+                <Text style={{ fontSize: 16, fontFamily: font.bold, color: '#2C2A29' }}>
                   {getSpriteById(spriteTemplateId).label}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
@@ -299,7 +299,7 @@ export function FieldNotesScreen({
               </View>
               {/* Auto-detected badge */}
               <View style={{ backgroundColor: '#FFE8DC', borderRadius: 99, paddingHorizontal: 9, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 9, fontWeight: '800', color: '#E67035', letterSpacing: 1 }}>AUTO</Text>
+                <Text style={{ fontSize: 9, fontFamily: font.bold, color: '#E67035', letterSpacing: 1 }}>AUTO</Text>
               </View>
             </View>
             <Pressable onPress={() => setOverridePicker(true)} style={{ marginTop: 12, alignSelf: 'flex-end' }}>
@@ -314,7 +314,7 @@ export function FieldNotesScreen({
                 <Text style={{ fontSize: 11, color: '#FF8E53' }}>← Back to detected sprite</Text>
               </Pressable>
             )}
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#706B67', marginBottom: 8 }}>
+            <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#706B67', marginBottom: 8 }}>
               Sprite Signature Look
             </Text>
             <ScrollView
@@ -335,7 +335,7 @@ export function FieldNotesScreen({
                   >
                     <Text
                       style={{
-                        fontSize: 11, fontWeight: '600',
+                        fontSize: 11, fontFamily: font.medium,
                         color: isSelected ? '#E67035' : '#706B67',
                         marginBottom: 5,
                       }}
@@ -425,7 +425,7 @@ export function FieldNotesScreen({
           <Text
             style={{
               fontSize: 13,
-              fontWeight: '600',
+              fontFamily: font.medium,
               color: hasPhoto ? '#E67035' : '#706B67',
             }}
           >
@@ -493,13 +493,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: -space.sm - space.xs,
   },
-  backArrow: { color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg },
-  screenTitle: { fontSize: fontSize.xl, fontWeight: weight.heavy, color: color.textPrimary },
+  backArrow: { color: color.ginger, fontFamily: font.bold, fontSize: fontSize.lg },
+  screenTitle: { fontSize: fontSize.xl, fontFamily: font.bold, color: color.textPrimary },
   screenSubtitle: { fontSize: fontSize.xs, color: color.textSecondary, marginTop: 2 },
 
   fieldLabel: {
     fontSize: fontSize.sm,
-    fontWeight: weight.bold,
+    fontFamily: font.bold,
     color: color.textSecondary,
     marginBottom: space.xs,
   },
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     borderColor: color.ginger,
     ...shadow.button,
   },
-  genderText: { fontWeight: weight.semibold, fontSize: fontSize.sm, color: color.textSecondary },
+  genderText: { fontFamily: font.medium, fontSize: fontSize.sm, color: color.textSecondary },
   genderTextActive: { color: color.milk },
 
   spriteChip: {
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   },
   footerSecondaryText: {
     color: color.textSecondary,
-    fontWeight: weight.bold,
+    fontFamily: font.bold,
     fontSize: fontSize.base,
   },
   footerPrimary: {
@@ -586,5 +586,5 @@ const styles = StyleSheet.create({
     backgroundColor: color.ginger,
     ...shadow.button,
   },
-  footerPrimaryText: { color: color.milk, fontWeight: weight.bold, fontSize: fontSize.base },
+  footerPrimaryText: { color: color.milk, fontFamily: font.bold, fontSize: fontSize.base },
 });

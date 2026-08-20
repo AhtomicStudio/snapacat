@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { Touchable } from '../components/Touchable';
-import { color, space, fontSize, weight, TAP_MIN } from '../theme';
+import { font, color, space, fontSize, TAP_MIN } from '../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Cat, ScrapbookEntry } from '../types';
 import { getSpriteTemplateColors } from '../utils/colorExtractor';
@@ -73,10 +73,10 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
             marginLeft: -space.sm,
           }}
         >
-          <Text style={{ color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg }}>←</Text>
+          <Text style={{ color: color.ginger, fontFamily: font.bold, fontSize: fontSize.lg }}>←</Text>
         </Touchable>
         <View>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>{cat.name}</Text>
+          <Text style={{ fontSize: 20, fontFamily: font.bold, color: '#2C2A29' }}>{cat.name}</Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>Scrapbook</Text>
         </View>
       </View>
@@ -113,7 +113,7 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
             <Text style={{ fontSize: 44 }}>🐱</Text>
           </View>
 
-          <Text style={{ fontSize: 24, fontWeight: '800', color: '#2C2A29', marginBottom: 8 }}>
+          <Text style={{ fontSize: 24, fontFamily: font.bold, color: '#2C2A29', marginBottom: 8 }}>
             {cat.name}
           </Text>
 
@@ -127,7 +127,7 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
               marginBottom: 20,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: genderCfg.text }}>
+            <Text style={{ fontSize: 12, fontFamily: font.bold, color: genderCfg.text }}>
               {genderCfg.label}
             </Text>
           </View>
@@ -165,7 +165,7 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
               paddingVertical: 7,
             }}
           >
-            <Text style={{ fontSize: 13, fontWeight: '600', color: '#2C2A29' }}>
+            <Text style={{ fontSize: 13, fontFamily: font.medium, color: '#2C2A29' }}>
               {entries.length === 0
                 ? 'No Field Notes yet'
                 : `${entries.length} Field Note${entries.length === 1 ? '' : 's'}`}
@@ -176,7 +176,7 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
         {/* Field notes timeline */}
         {entries.length > 0 ? (
           <>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: '#2C2A29', marginBottom: 14 }}>
+            <Text style={{ fontSize: 18, fontFamily: font.bold, color: '#2C2A29', marginBottom: 14 }}>
               Field Notes
             </Text>
             {entries.map((entry) => (
@@ -199,7 +199,7 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
             ]}
           >
             <Text style={{ fontSize: 38, marginBottom: 12 }}>📓</Text>
-            <Text style={{ fontSize: 16, fontWeight: '700', color: '#2C2A29' }}>
+            <Text style={{ fontSize: 16, fontFamily: font.bold, color: '#2C2A29' }}>
               Nothing written yet
             </Text>
             <Text
@@ -246,7 +246,7 @@ function FieldNoteCard({ entry }: { entry: ScrapbookEntry }) {
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
           <Text style={{ fontSize: 13 }}>📍</Text>
-          <Text style={{ fontSize: 13, fontWeight: '600', color: '#2C2A29' }}>
+          <Text style={{ fontSize: 13, fontFamily: font.medium, color: '#2C2A29' }}>
             {entry.hood_name || 'Unknown location'}
           </Text>
         </View>

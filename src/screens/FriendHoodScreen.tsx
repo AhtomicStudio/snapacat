@@ -37,7 +37,7 @@ import { getThemeById, DEFAULT_THEME } from '../config/themes';
 import { resolveTimeOfDay, isDark, skyPalette, type TimeOfDay } from '../utils/timeOfDay';
 import { describeActivity } from '../utils/hoodMood';
 import { getPropSheet } from '../assets/props';
-import { color, space, radius, fontSize, weight, shadow, TAP_MIN } from '../theme';
+import { font, color, space, radius, fontSize, shadow, TAP_MIN } from '../theme';
 import type { Hood } from '../types';
 
 // ---------------------------------------------------------------------------
@@ -367,12 +367,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginLeft: -space.sm - space.xs,
   },
-  stateTitle: { fontSize: fontSize.xl, fontWeight: weight.heavy, color: color.textPrimary },
+  stateTitle: { fontSize: fontSize.xl, fontFamily: font.bold, color: color.textPrimary },
   stateBody: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: space.xl },
   stateEmoji: { fontSize: 44, marginBottom: space.md },
   stateHeadline: {
     fontSize: fontSize.base,
-    fontWeight: weight.bold,
+    fontFamily: font.bold,
     color: color.textPrimary,
     textAlign: 'center',
   },
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(28,32,58,0.75)',
     borderColor: 'rgba(180,192,255,0.22)',
   },
-  backArrow: { color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg },
+  backArrow: { color: color.ginger, fontFamily: font.bold, fontSize: fontSize.lg },
 
   titlePill: {
     flex: 1,
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     ...shadow.card,
   },
-  friendName: { fontSize: fontSize.sm, fontWeight: weight.heavy, color: color.textPrimary },
+  friendName: { fontSize: fontSize.sm, fontFamily: font.bold, color: color.textPrimary },
   viewingLabel: { fontSize: 11, color: color.textSecondary, marginTop: 1 },
 
   switcher: { position: 'absolute', left: 0, right: 0 },
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   switcherChipActive: { backgroundColor: color.ginger, borderColor: color.ginger },
-  switcherChipText: { fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textPrimary },
+  switcherChipText: { fontSize: fontSize.xs, fontFamily: font.bold, color: color.textPrimary },
   switcherChipTextActive: { color: color.milk },
 
   // ── Footer ───────────────────────────────────────────────────────────────
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
   },
   footerLine: {
     fontSize: fontSize.base,
-    fontWeight: weight.heavy,
+    fontFamily: font.bold,
     color: color.textPrimary,
     paddingHorizontal: space.lg,
   },
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     paddingVertical: space.xs + 2,
   },
   footerArt: { width: 26, height: 26 },
-  footerChipText: { fontSize: fontSize.xs, fontWeight: weight.semibold, color: color.textPrimary },
+  footerChipText: { fontSize: fontSize.xs, fontFamily: font.medium, color: color.textPrimary },
   footerEmpty: {
     fontSize: fontSize.xs,
     color: color.textSecondary,

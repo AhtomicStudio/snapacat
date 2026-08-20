@@ -15,6 +15,7 @@ import { getSpriteById, RARITY_STARS } from '../utils/spriteLibrary';
 import { HIT_SLOP_MD } from '../utils/styles';
 import { Touchable } from '../components/Touchable';
 import {
+  font,
   color,
   space,
   radius,
@@ -22,7 +23,6 @@ import {
   shadow,
   pill,
   fontSize,
-  weight,
   TAP_MIN,
 } from '../theme';
 import type { Cat } from '../types';
@@ -186,7 +186,7 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
                 >
                   <Text
                     numberOfLines={1}
-                    style={{ fontSize: 10, fontWeight: '600', color: '#706B67' }}
+                    style={{ fontSize: 10, fontFamily: font.medium, color: '#706B67' }}
                   >
                     📍 {hood}
                   </Text>
@@ -320,7 +320,7 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
           ListEmptyComponent={searchQuery.trim() ? (
             <View style={{ flex: 1, alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24 }}>
               <Text style={{ fontSize: 44 }}>🔍</Text>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#2C2A29', marginTop: 14 }}>
+              <Text style={{ fontSize: 16, fontFamily: font.bold, color: '#2C2A29', marginTop: 14 }}>
                 No cats match "{searchQuery.trim()}"
               </Text>
               <Text style={{ fontSize: 13, color: '#706B67', marginTop: 6, textAlign: 'center' }}>
@@ -330,7 +330,7 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
           ) : (
             <View style={{ flex: 1, alignItems: 'center', paddingVertical: 64, paddingHorizontal: 24 }}>
               <Text style={{ fontSize: 52 }}>🐾</Text>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#2C2A29', marginTop: 16 }}>
+              <Text style={{ fontSize: 18, fontFamily: font.bold, color: '#2C2A29', marginTop: 16 }}>
                 No cats discovered yet
               </Text>
               <Text style={{ fontSize: 14, color: '#706B67', marginTop: 6, textAlign: 'center', lineHeight: 20 }}>
@@ -380,8 +380,8 @@ const styles = StyleSheet.create({
     // otherwise indents the title by its own padding.
     marginLeft: -space.sm - space.xs,
   },
-  backArrow: { color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg },
-  screenTitle: { fontSize: fontSize.xxl, fontWeight: weight.heavy, color: color.textPrimary },
+  backArrow: { color: color.ginger, fontFamily: font.bold, fontSize: fontSize.lg },
+  screenTitle: { fontSize: fontSize.xxl, fontFamily: font.bold, color: color.textPrimary },
   screenSubtitle: { fontSize: fontSize.xs, color: color.textSecondary, marginTop: 2 },
 
   primaryButton: {
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow.button,
   },
-  primaryButtonText: { color: color.milk, fontWeight: weight.heavy, fontSize: fontSize.sm },
+  primaryButtonText: { color: color.milk, fontFamily: font.bold, fontSize: fontSize.sm },
 
   // ── Cat card ─────────────────────────────────────────────────────────────
   catCard: {
@@ -414,11 +414,11 @@ const styles = StyleSheet.create({
   },
   catName: {
     fontSize: fontSize.xl,
-    fontWeight: weight.bold,
+    fontFamily: font.bold,
     color: color.textPrimary,
     flexShrink: 1,
   },
-  badgeLabel: { fontSize: fontSize.xs, fontWeight: weight.semibold, color: color.textPrimary },
+  badgeLabel: { fontSize: fontSize.xs, fontFamily: font.medium, color: color.textPrimary },
 
   cardFooter: {
     flexDirection: 'row',
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
   },
   scrapbookChipText: {
     color: color.gingerDark,
-    fontWeight: weight.semibold,
+    fontFamily: font.medium,
     fontSize: fontSize.sm,
   },
 
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     borderColor: color.border,
   },
   sortChipActive: { backgroundColor: color.gingerLight, borderColor: color.ginger },
-  sortChipText: { fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textSecondary },
+  sortChipText: { fontSize: fontSize.xs, fontFamily: font.bold, color: color.textSecondary },
   sortChipTextActive: { color: color.gingerDark },
 
   // ── States ───────────────────────────────────────────────────────────────
@@ -470,5 +470,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...shadow.button,
   },
-  emptyCtaText: { fontSize: fontSize.base, fontWeight: weight.heavy, color: color.milk },
+  emptyCtaText: { fontSize: fontSize.base, fontFamily: font.bold, color: color.milk },
 });
