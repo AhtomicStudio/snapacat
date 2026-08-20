@@ -49,3 +49,8 @@ Reference/
 
 # --- Claude Code session-local settings ---
 .claude/settings.local.json
+
+# Seeded design-canvas output. ~2.3MB of editor payload regenerated from the
+# .dc.html sources next to it — the sources are what's worth versioning.
+design/*.html
+!design/*.dc.html

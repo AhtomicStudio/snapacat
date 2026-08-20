@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Nunito, system-ui, sans-serif; }
+    a { color: #E67035; } a:hover { color: #C25A26; }
+    .px { image-rendering: pixelated; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #FAF6F0; font-family: Nunito, system-ui, sans-serif;">
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <div style="background: #FFF; border-bottom: 1px solid #EAE3DA; padding: 52px 20px 16px; display: flex; align-items: center; gap: 12px;">
+    <div style="flex: 1;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 25px; font-weight: 700; color: #2C2A29;">Shop</div>
+      <div style="font-size: 13px; color: #706B67; margin-top: 1px;">Themes, environments &amp; goodies</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 7px; background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 4px 0 #C25A26; border-radius: 999px; padding: 9px 16px;">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff">
+        <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+        <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+        <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+      </svg>
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #fff;">250</span>
+    </div>
+  </div>
+
+  <!-- ── Segmented tabs. Real segments in a track, not three run-on
+       labels sharing one line. ─────────────────────────────────────── -->
+  <div style="margin: 16px 20px 0; background: #F0EBE3; border-radius: 16px; padding: 4px; display: flex; gap: 4px;">
+    <div style="flex: 1; background: #FFF; border-radius: 13px; padding: 10px 0; text-align: center; box-shadow: 0 2px 4px rgba(44,42,41,.09);">
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #2C2A29;">Themes</span>
+    </div>
+    <div style="flex: 1; padding: 10px 0; text-align: center;">
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #8B857F;">Places</span>
+    </div>
+    <div style="flex: 1; padding: 10px 0; text-align: center;">
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #8B857F;">Goodies</span>
+    </div>
+  </div>
+
+  <!-- ── Cards ───────────────────────────────────────────────────────── -->
+  <div style="padding: 18px 20px 0; display: flex; flex-direction: column; gap: 14px;">
+
+    <!-- Active -->
+    <div style="background: #FFF; border: 2px solid #FF8E53; border-radius: 22px; overflow: hidden; box-shadow: 0 4px 0 rgba(255,142,83,.2), 0 8px 18px rgba(44,42,41,.06);">
+      <div style="height: 96px; background: linear-gradient(#FF8E53 0 52%, #F79E89 52% 100%); position: relative;">
+        <div style="position: absolute; top: 10px; right: 12px; width: 28px; height: 28px; border-radius: 50%; background: #FFF; display: flex; align-items: center; justify-content: center;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>
+        </div>
+      </div>
+      <div style="padding: 14px 16px 16px; display: flex; align-items: center; gap: 12px;">
+        <div style="flex: 1;">
+          <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #2C2A29;">Ginger Alley</div>
+          <div style="font-size: 12.5px; color: #706B67; margin-top: 2px;">The classic warm neighbourhood vibe.</div>
+        </div>
+        <div style="background: #EAF7EE; border-radius: 999px; padding: 6px 13px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 12px; font-weight: 700; color: #1E8B4A;">In use</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Affordable -->
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; overflow: hidden; box-shadow: 0 4px 0 rgba(44,42,41,.05), 0 8px 18px rgba(44,42,41,.06);">
+      <div style="height: 96px; background: linear-gradient(#141A32 0 46%, #6C6FB5 46% 100%); position: relative;">
+        <div style="position: absolute; left: 16px; bottom: 12px; width: 26px; height: 26px; border-radius: 50%; background: #FFD98A; box-shadow: 6px 0 0 -1px #6C6FB5;"></div>
+      </div>
+      <div style="padding: 14px 16px 16px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="flex: 1;">
+            <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #2C2A29;">Midnight Prowl</div>
+            <div style="font-size: 12.5px; color: #706B67; margin-top: 2px;">Navy skies and neon-touched shadows.</div>
+          </div>
+        </div>
+        <div style="margin-top: 13px; background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 4px 0 #C25A26; border-radius: 15px; height: 46px; display: flex; align-items: center; justify-content: center; gap: 7px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15px; font-weight: 700; color: #fff;">Unlock for</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff">
+            <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+            <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+            <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+          </svg>
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15px; font-weight: 700; color: #fff;">100</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Not yet affordable. Shows the SHORTFALL, not a flat refusal —
+         "Not enough 🐾" tells you nothing about how close you are. -->
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; overflow: hidden; box-shadow: 0 4px 0 rgba(44,42,41,.05), 0 8px 18px rgba(44,42,41,.06);">
+      <div style="height: 96px; background: linear-gradient(#FBDCE6 0 48%, #E890B4 48% 100%);"></div>
+      <div style="padding: 14px 16px 16px;">
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #2C2A29;">Sakura Garden</div>
+        <div style="font-size: 12.5px; color: #706B67; margin-top: 2px;">Soft blossoms and gentle rose tones.</div>
+        <div style="margin-top: 13px; background: #F0EBE3; border-radius: 15px; height: 46px; display: flex; align-items: center; justify-content: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #8B857F;">50 more paw points</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Sticky footer ───────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFF; border-top: 1px solid #EAE3DA; padding: 14px 20px 30px;">
+    <div style="background: #FAF6F0; border: 1.5px solid #EAE3DA; border-radius: 16px; height: 50px; display: flex; align-items: center; justify-content: center;">
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #706B67;">Done</span>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

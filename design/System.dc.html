@@ -1,0 +1,241 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Nunito, system-ui, sans-serif; }
+    a { color: #E67035; } a:hover { color: #C25A26; }
+    .px { image-rendering: pixelated; }
+  </style>
+</helmet>
+
+<div style="width: 760px; background: #FAF6F0; font-family: Nunito, system-ui, sans-serif; padding: 36px 40px 44px;">
+
+  <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 30px; font-weight: 700; color: #2C2A29;">Cozy system</div>
+  <div style="font-size: 14px; color: #706B67; margin-top: 4px; max-width: 560px; line-height: 1.5;">
+    Every value here already exists in <span style="font-family: ui-monospace, monospace; font-size: 13px; background: #F0EBE3; padding: 1px 5px; border-radius: 4px;">src/theme.ts</span>.
+    What's new is the <strong>lip</strong> — a solid drop shadow that makes a control read as a physical object rather than a coloured rectangle.
+  </div>
+
+  <!-- ── The lip ─────────────────────────────────────────────────────── -->
+  <div style="margin-top: 32px; background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+    <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">The lip</div>
+    <div style="font-size: 13.5px; color: #706B67; margin-top: 3px; line-height: 1.55; max-width: 620px;">
+      A button gets <span style="font-family: ui-monospace, monospace; font-size: 12.5px;">box-shadow: 0 5px 0 &lt;darker&gt;</span> — no blur.
+      Pressing translates it down by the lip's height and removes the shadow, so it physically sinks.
+      This one detail is most of the difference between "app button" and "game button".
+    </div>
+
+    <div style="display: flex; gap: 40px; margin-top: 24px; align-items: flex-end;">
+      <div style="text-align: center;">
+        <div style="background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 5px 0 #C25A26; border-radius: 17px; padding: 15px 30px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #fff;">Rest</span>
+        </div>
+        <div style="font-size: 11.5px; color: #A49E98; margin-top: 14px;">lip 5px</div>
+      </div>
+
+      <div style="text-align: center;">
+        <div style="background: linear-gradient(#FF8E53, #F5814A); box-shadow: 0 0 0 #C25A26; border-radius: 17px; padding: 15px 30px; transform: translateY(5px);">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #fff;">Pressed</span>
+        </div>
+        <div style="font-size: 11.5px; color: #A49E98; margin-top: 9px;">translateY(5px), lip 0</div>
+      </div>
+
+      <div style="text-align: center;">
+        <div style="background: #F0EBE3; box-shadow: 0 5px 0 #DDD5C9; border-radius: 17px; padding: 15px 30px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 16px; font-weight: 700; color: #A49E98;">Disabled</span>
+        </div>
+        <div style="font-size: 11.5px; color: #A49E98; margin-top: 14px;">no gradient</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Buttons ─────────────────────────────────────────────────────── -->
+  <div style="margin-top: 20px; background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+    <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Buttons</div>
+    <div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; align-items: center;">
+      <div style="background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 5px 0 #C25A26; border-radius: 17px; padding: 15px 26px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15.5px; font-weight: 700; color: #fff;">Primary</span>
+      </div>
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; box-shadow: 0 4px 0 #EFE8DE; border-radius: 17px; padding: 14px 26px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15.5px; font-weight: 700; color: #706B67;">Secondary</span>
+      </div>
+      <div style="border-radius: 17px; padding: 14px 20px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15.5px; font-weight: 700; color: #E67035;">Text action</span>
+      </div>
+      <div style="width: 56px; height: 56px; border-radius: 19px; background: #FFF7EE; box-shadow: 0 5px 0 #D9C4AE; display: flex; align-items: center; justify-content: center;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8h16l-1.2 11.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8z"/><path d="M8.5 8V6a3.5 3.5 0 017 0v2"/>
+        </svg>
+      </div>
+      <div style="width: 68px; height: 68px; border-radius: 23px; background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 6px 0 #C25A26, 0 12px 20px rgba(255,142,83,.35); display: flex; align-items: center; justify-content: center;">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.5A2.5 2.5 0 015.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0121 8.5v9A2.5 2.5 0 0118.5 20h-13A2.5 2.5 0 013 17.5z"/>
+          <circle cx="12" cy="13" r="3.6"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Chips & segments ────────────────────────────────────────────── -->
+  <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;">
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Chips</div>
+      <div style="font-size: 12.5px; color: #706B67; margin-top: 3px; line-height: 1.5;">
+        Always <span style="font-family: ui-monospace, monospace; font-size: 12px;">alignSelf: 'flex-start'</span>. Without it a chip stretches to the parent and becomes a banner.
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px;">
+        <div style="background: #FF8E53; box-shadow: 0 3px 0 #C25A26; border-radius: 999px; padding: 8px 15px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #fff;">Selected</span>
+        </div>
+        <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 999px; padding: 8px 15px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #706B67;">Default</span>
+        </div>
+        <div style="background: #F79E89; border-radius: 999px; padding: 7px 14px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 12.5px; font-weight: 700; color: #2C2A29;">Female</span>
+        </div>
+        <div style="background: #A8D0E6; border-radius: 999px; padding: 7px 14px;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 12.5px; font-weight: 700; color: #2C2A29;">Male</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Segments</div>
+      <div style="font-size: 12.5px; color: #706B67; margin-top: 3px; line-height: 1.5;">
+        A recessed track with one raised segment. The Shop's tabs had neither.
+      </div>
+      <div style="margin-top: 16px; background: #F0EBE3; border-radius: 16px; padding: 4px; display: flex; gap: 4px;">
+        <div style="flex: 1; background: #FFF; border-radius: 13px; padding: 10px 0; text-align: center; box-shadow: 0 2px 4px rgba(44,42,41,.09);">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13.5px; font-weight: 700; color: #2C2A29;">Themes</span>
+        </div>
+        <div style="flex: 1; padding: 10px 0; text-align: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13.5px; font-weight: 700; color: #8B857F;">Places</span>
+        </div>
+        <div style="flex: 1; padding: 10px 0; text-align: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13.5px; font-weight: 700; color: #8B857F;">Goodies</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Alignment ───────────────────────────────────────────────────── -->
+  <div style="margin-top: 20px; background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+    <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Alignment rules</div>
+    <div style="font-size: 13.5px; color: #706B67; margin-top: 3px; line-height: 1.55; max-width: 620px;">
+      The misalignment you spotted came from four different things failing, not four decisions. These are the rules that keep it fixed.
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 18px;">
+      <div style="display: flex; gap: 13px; align-items: flex-start;">
+        <div style="width: 26px; height: 26px; border-radius: 9px; background: #FFE8DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #E67035;">1</span>
+        </div>
+        <div style="font-size: 13.5px; color: #2C2A29; line-height: 1.5;">
+          <strong>One gutter per screen.</strong> 24px, from <span style="font-family: ui-monospace, monospace; font-size: 12.5px;">GUTTER</span>. Header, body and footer all start on it — the Shop had four different insets.
+        </div>
+      </div>
+      <div style="display: flex; gap: 13px; align-items: flex-start;">
+        <div style="width: 26px; height: 26px; border-radius: 9px; background: #FFE8DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #E67035;">2</span>
+        </div>
+        <div style="font-size: 13.5px; color: #2C2A29; line-height: 1.5;">
+          <strong>Header rows are <span style="font-family: ui-monospace, monospace; font-size: 12.5px;">alignItems: 'center'</span>.</strong> The back arrow, the title block and the action share one axis. The arrow was floating between two title lines.
+        </div>
+      </div>
+      <div style="display: flex; gap: 13px; align-items: flex-start;">
+        <div style="width: 26px; height: 26px; border-radius: 9px; background: #FFE8DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #E67035;">3</span>
+        </div>
+        <div style="font-size: 13.5px; color: #2C2A29; line-height: 1.5;">
+          <strong>Optical edges, not box edges.</strong> A 44pt tap target around a 16pt glyph indents the row by 14pt. Pull it back with a negative margin so the glyph sits on the gutter.
+        </div>
+      </div>
+      <div style="display: flex; gap: 13px; align-items: flex-start;">
+        <div style="width: 26px; height: 26px; border-radius: 9px; background: #FFE8DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #E67035;">4</span>
+        </div>
+        <div style="font-size: 13.5px; color: #2C2A29; line-height: 1.5;">
+          <strong>Never space siblings with whitespace or per-child margins.</strong> Use <span style="font-family: ui-monospace, monospace; font-size: 12.5px;">gap</span> on a flex parent — it survives adding, removing and reordering.
+        </div>
+      </div>
+      <div style="display: flex; gap: 13px; align-items: flex-start;">
+        <div style="width: 26px; height: 26px; border-radius: 9px; background: #FFE8DC; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #E67035;">5</span>
+        </div>
+        <div style="font-size: 13.5px; color: #2C2A29; line-height: 1.5;">
+          <strong>44pt minimum on anything tappable</strong>, including the ones that currently read as text links.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Type & colour ───────────────────────────────────────────────── -->
+  <div style="margin-top: 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;">
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Type</div>
+      <div style="font-size: 12.5px; color: #706B67; margin-top: 3px; line-height: 1.5;">
+        Quicksand for anything structural, Nunito for body. Both are in your tokens already — neither is linked, so the app renders in Roboto today.
+      </div>
+      <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 9px;">
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 25px; font-weight: 700; color: #2C2A29;">Cat-a-log <span style="font-size: 11px; color: #A49E98; font-family: Nunito;">Quicksand 700 / 25</span></div>
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #2C2A29;">Section heading <span style="font-size: 11px; color: #A49E98; font-family: Nunito;">700 / 17</span></div>
+        <div style="font-size: 14px; color: #2C2A29; line-height: 1.5;">Body copy sits in Nunito at 14 with a 20 line height. <span style="font-size: 11px; color: #A49E98;">Nunito 400 / 14</span></div>
+        <div style="font-size: 12.5px; color: #706B67;">Secondary and captions. <span style="font-size: 11px; color: #A49E98;">Nunito 400 / 12.5</span></div>
+      </div>
+    </div>
+
+    <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Colour</div>
+      <div style="font-size: 12.5px; color: #706B67; margin-top: 3px; line-height: 1.5;">
+        Unchanged from your tokens, plus a lip tone per fill.
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px;">
+        <div><div style="height: 46px; border-radius: 12px; background: #FF8E53;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">ginger</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #C25A26;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">lip</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #FFE8DC;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">light</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #2C2A29;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">ink</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #FAF6F0; border: 1px solid #EAE3DA;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">cream</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #F3EDE4;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">sunken</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #C9A227;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">rare</div></div>
+        <div><div style="height: 46px; border-radius: 12px; background: #6B6862;"></div><div style="font-size: 10.5px; color: #706B67; margin-top: 5px;">asphalt</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Icons ───────────────────────────────────────────────────────── -->
+  <div style="margin-top: 20px; background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 22px; padding: 26px 28px;">
+    <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 19px; font-weight: 700; color: #2C2A29;">Icons: drawn, not emoji</div>
+    <div style="font-size: 13.5px; color: #706B67; margin-top: 3px; line-height: 1.55; max-width: 620px;">
+      Emoji render differently per OS, ignore the pixel grid, and sit badly beside hand-authored sprites. UI icons are 24px stroke; anything in the world is pixel art.
+    </div>
+    <div style="display: flex; gap: 26px; margin-top: 20px; align-items: center; flex-wrap: wrap;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2C2A29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16l-1.2 11.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8z"/><path d="M8.5 8V6a3.5 3.5 0 017 0v2"/></svg>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2C2A29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5A1.5 1.5 0 016.5 3H18a1 1 0 011 1v15a1 1 0 01-1 1H6.5A1.5 1.5 0 015 18.5z"/><path d="M9 8h6M9 12h4"/></svg>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2C2A29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 015.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0121 8.5v9A2.5 2.5 0 0118.5 20h-13A2.5 2.5 0 013 17.5z"/><circle cx="12" cy="13" r="3.6"/></svg>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2C2A29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.2 2.7-5.4 6-5.4s6 2.2 6 5.4"/><path d="M16 11.2a3 3 0 000-6"/><path d="M18 20c0-2.6-1-4.4-2.6-5.4"/></svg>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2C2A29" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="#2C2A29"><ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/><ellipse cx="17" cy="9" rx="2.1" ry="2.7"/><path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/></svg>
+      <div style="width: 1px; height: 34px; background: #EAE3DA;"></div>
+      <img class="px" src="./prop_kibble_bowl.png" style="width: 40px; height: 40px;">
+      <img class="px" src="./prop_yarn_ball.png" style="width: 40px; height: 40px;">
+      <img class="px" src="./prop_catnip.png" style="width: 40px; height: 40px;">
+      <img class="px" src="./prop_lantern.png" style="width: 40px; height: 40px;">
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

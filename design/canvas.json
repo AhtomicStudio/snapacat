@@ -1,0 +1,65 @@
+{
+  "pages": [
+    { "id": "screens", "name": "Screens" },
+    { "id": "system", "name": "System" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html", "page": "screens", "title": "The Hood", "x": 0, "y": 0, "w": 390, "h": 844 },
+    { "file": "HoodDrawer.dc.html", "page": "screens", "title": "Decorating drawer", "x": 450, "y": 0, "w": 390, "h": 844 },
+    { "file": "CatCard.dc.html", "page": "screens", "title": "Tapped a cat", "x": 900, "y": 0, "w": 390, "h": 844 },
+    { "file": "Catalog.dc.html", "page": "screens", "title": "Cat-a-log", "x": 1350, "y": 0, "w": 390, "h": 844 },
+    { "file": "Shop.dc.html", "page": "screens", "title": "Shop", "x": 1800, "y": 0, "w": 390, "h": 844 },
+    { "file": "System.dc.html", "page": "system", "title": "Cozy system", "x": 0, "y": 0, "w": 760, "h": 1580, "print": "flow" }
+  ],
+  "annotations": [
+    {
+      "id": "note-scene-first",
+      "page": "screens",
+      "x": 0,
+      "y": -150,
+      "w": 390,
+      "text": "THE HOOD\n\nChrome drops to three chunky buttons plus the drawer peek. Every icon is drawn, not emoji — emoji render differently per OS and sit badly next to hand-authored sprites.\n\nThe badge on Cat-a-log is the only count on screen. It earns its place: it says a cat you have not met is waiting."
+    },
+    {
+      "id": "note-drawer",
+      "page": "screens",
+      "x": 450,
+      "y": -150,
+      "w": 390,
+      "text": "DECORATING DRAWER\n\nCategory tabs, because 25 goodies stopped fitting a flat tray somewhere around 12. Locked items show a PRICE but never an effect — publishing '+15%' turns choosing a goodie into arithmetic with one right answer.\n\nThe scene stays visible above, so you can see what you are decorating."
+    },
+    {
+      "id": "note-catcard",
+      "page": "screens",
+      "x": 900,
+      "y": -150,
+      "w": 390,
+      "text": "THE PAYOFF\n\nCurrently a plain white modal. This is the emotional beat of the whole loop, so it is framed like a field photograph.\n\n'Came for the cat bed' is what makes decorating legible without ever quoting a spawn percentage."
+    },
+    {
+      "id": "note-catalog",
+      "page": "screens",
+      "x": 1350,
+      "y": -196,
+      "w": 390,
+      "text": "CAT-A-LOG — the biggest structural change\n\nToday it lists cats you already have, which is a database view. A collection game runs on the EMPTY slots: silhouettes of breeds you have not met are what make the next cat worth chasing.\n\nThis reframes the index around the 20 breeds, with your named cats inside each. Worth discussing before I build it — it touches the data model."
+    },
+    {
+      "id": "note-shop",
+      "page": "screens",
+      "x": 1800,
+      "y": -150,
+      "w": 390,
+      "text": "SHOP\n\nSwatches now sit inside the card radius, every row shares one gutter, and the buy button carries the price rather than a separate badge.\n\n'50 more paw points' replaces 'Not enough' — a shortfall tells you how close you are; a refusal tells you nothing."
+    },
+    {
+      "id": "note-system",
+      "page": "system",
+      "x": 0,
+      "y": -160,
+      "w": 620,
+      "text": "Every colour and spacing value here already exists in src/theme.ts. What is new is the lip, the icon rule, and the five alignment rules.\n\nThe alignment rules are the direct answer to the buttons being out of line: it was four different failures, not four decisions."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "screens" }
+}

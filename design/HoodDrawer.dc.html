@@ -1,0 +1,172 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Nunito, system-ui, sans-serif; }
+    a { color: #E67035; } a:hover { color: #C25A26; }
+    .px { image-rendering: pixelated; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #141A32; font-family: Nunito, system-ui, sans-serif;">
+
+  <!-- Scene behind, dimmed — the drawer never fully covers the Hood, so you
+       can still see what you're decorating. -->
+  <div style="position: absolute; inset: 0 0 55% 0; background: linear-gradient(#141A32, #1E2544 60%, #33395E);"></div>
+  <div style="position: absolute; left: 0; right: 0; top: 178px; height: 62px; background:
+      repeating-linear-gradient(to bottom, #66392F 0 2px, #8A5346 2px 12px), #8A5346;"></div>
+  <div style="position: absolute; left: 0; right: 0; top: 240px; height: 130px; background: #6B6862;"></div>
+  <img class="px" src="./prop_kibble_bowl.png" style="position: absolute; left: 44px; top: 258px; width: 48px; height: 48px;">
+  <div class="px" style="position: absolute; left: 214px; top: 250px; width: 72px; height: 72px; background-image: url(./cat_tuxedo.png); background-size: 432px 72px; background-position: 0 0;"></div>
+  <div style="position: absolute; inset: 0 0 55% 0; background: rgba(20,14,8,.35);"></div>
+
+  <!-- ── Drawer ──────────────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; top: 340px; background: #FAF6F0; border-radius: 26px 26px 0 0; box-shadow: 0 -6px 22px rgba(20,14,8,.35); display: flex; flex-direction: column;">
+
+    <div style="width: 42px; height: 5px; border-radius: 3px; background: #DED6CB; margin: 10px auto 0;"></div>
+
+    <!-- Header -->
+    <div style="padding: 14px 22px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div>
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 21px; font-weight: 700; color: #2C2A29;">Put something out</div>
+        <div style="font-size: 12.5px; color: #706B67; margin-top: 2px;">Tap it in the scene to pick it back up.</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px; background: #FFF; border: 1px solid #EAE3DA; border-radius: 999px; padding: 8px 12px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="#FF8E53">
+          <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+          <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+          <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+        </svg>
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-weight: 700; font-size: 14px; color: #2C2A29;">250</span>
+      </div>
+    </div>
+
+    <!-- Category tabs. The catalogue is 25 items and growing; a single flat
+         tray stops working somewhere around 12. -->
+    <div style="display: flex; gap: 8px; padding: 16px 22px 0; overflow: hidden;">
+      <div style="background: #FF8E53; box-shadow: 0 3px 0 #C25A26; border-radius: 999px; padding: 8px 15px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #fff;">All</span>
+      </div>
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 999px; padding: 8px 15px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #706B67;">Food</span>
+      </div>
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 999px; padding: 8px 15px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #706B67;">Toys</span>
+      </div>
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 999px; padding: 8px 15px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #706B67;">Shelter</span>
+      </div>
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 999px; padding: 8px 15px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 13px; font-weight: 700; color: #706B67;">Decor</span>
+      </div>
+    </div>
+
+    <!-- Item grid -->
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 16px 22px 0;">
+
+      <!-- Out: 2 -->
+      <div style="background: #FFF; border: 2px solid #FF8E53; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative; box-shadow: 0 3px 0 rgba(255,142,83,.22);">
+        <img class="px" src="./prop_kibble_bowl.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Kibble<br>Bowl</span>
+        <div style="position: absolute; top: -7px; right: -5px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #FF8E53; box-shadow: 0 2px 0 #C25A26; display: flex; align-items: center; justify-content: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 11px; font-weight: 700; color: #fff;">2</span>
+        </div>
+      </div>
+
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <img class="px" src="./prop_water_dish.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Water<br>Dish</span>
+      </div>
+
+      <div style="background: #FFF; border: 2px solid #FF8E53; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; position: relative; box-shadow: 0 3px 0 rgba(255,142,83,.22);">
+        <img class="px" src="./prop_toy_mouse.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Toy<br>Mouse</span>
+        <div style="position: absolute; top: -7px; right: -5px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #FF8E53; box-shadow: 0 2px 0 #C25A26; display: flex; align-items: center; justify-content: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 11px; font-weight: 700; color: #fff;">1</span>
+        </div>
+      </div>
+
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <img class="px" src="./prop_yarn_ball.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Yarn<br>Ball</span>
+      </div>
+
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <img class="px" src="./prop_cardboard_box.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Cardboard<br>Box</span>
+      </div>
+
+      <div style="background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <img class="px" src="./prop_cozy_basket.png" style="width: 46px; height: 46px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #2C2A29; text-align: center; line-height: 1.2;">Cozy<br>Basket</span>
+      </div>
+
+      <!-- Locked: the price is shown, the effect is not. Publishing "+15%"
+           turns choosing a goodie into arithmetic with one right answer. -->
+      <div style="background: #F3EDE4; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+          <img class="px" src="./prop_lantern.png" style="width: 46px; height: 46px; opacity: .28;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A49E98" stroke-width="2.4" stroke-linecap="round" style="position: absolute;">
+            <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7.5a4 4 0 018 0V11"/>
+          </svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 3px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="#A49E98">
+            <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+            <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+            <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+          </svg>
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #A49E98;">65</span>
+        </div>
+      </div>
+
+      <div style="background: #F3EDE4; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 10px 6px 8px; display: flex; flex-direction: column; align-items: center; gap: 5px;">
+        <div style="position: relative; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;">
+          <img class="px" src="./prop_premium_kibble.png" style="width: 46px; height: 46px; opacity: .28;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A49E98" stroke-width="2.4" stroke-linecap="round" style="position: absolute;">
+            <rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7.5a4 4 0 018 0V11"/>
+          </svg>
+        </div>
+        <div style="display: flex; align-items: center; gap: 3px;">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="#A49E98">
+            <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+            <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+            <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+          </svg>
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #A49E98;">200</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shop entry, at the end of the tray where you hit it after finding
+         nothing you want. -->
+    <div style="margin: 18px 22px 0; background: #FFF; border: 1.5px solid #EAE3DA; border-radius: 20px; padding: 14px 16px; display: flex; align-items: center; gap: 12px;">
+      <div style="width: 42px; height: 42px; border-radius: 14px; background: #FFE8DC; display: flex; align-items: center; justify-content: center;">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8h16l-1.2 11.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8z"/><path d="M8.5 8V6a3.5 3.5 0 017 0v2"/>
+        </svg>
+      </div>
+      <div style="flex: 1;">
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 15px; font-weight: 700; color: #2C2A29;">More goodies</div>
+        <div style="font-size: 12px; color: #706B67;">17 still to unlock</div>
+      </div>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -118,8 +118,11 @@ function buildSkyline(seed: number): BuildingSpec[] {
     const r1 = ((seed ^ Math.imul(i + 1, 0x27d4eb2d)) >>> 8) / 0xffffff;
     const r2 = ((seed ^ Math.imul(i + 7, 0x165667b1)) >>> 8) / 0xffffff;
     const width = 0.035 + r1 * 0.055;
-    const height = 26 + r2 * 84;
-    specs.push({ left: cursor, width, height, windows: 2 + Math.floor(r1 * 5) });
+    // Buildings have to clear the mid-ground wall or the whole skyline hides
+    // behind it — which is exactly what happened at 26–110px against a 74px
+    // wall: one tall block poked out and the rest of the sky read as empty.
+    const height = 96 + r2 * 150;
+    specs.push({ left: cursor, width, height, windows: 3 + Math.floor(r1 * 8) });
     // Overlap slightly so the roofline reads as a continuous block, not a fence.
     cursor += width - 0.005;
     i++;
@@ -760,16 +763,18 @@ export function HoodScene({
               transform: [{ translateX: parallax(PARALLAX_SKY) }],
             }}
           >
+            {/* Parked below the top chrome, not behind it — at 0.16 of the
+                horizon the moon sat under the Hood-name pill. */}
             <View
               style={{
                 position: 'absolute',
-                left: viewW * 0.72,
-                top: horizonY * 0.16,
-                width: dark ? 34 : 46,
-                height: dark ? 34 : 46,
-                borderRadius: 23,
+                left: viewW * 0.66,
+                top: horizonY * 0.40,
+                width: dark ? 38 : 52,
+                height: dark ? 38 : 52,
+                borderRadius: 26,
                 backgroundColor: dark ? '#EFF1FF' : '#FFF0BE',
-                opacity: dark ? 0.9 : 0.85,
+                opacity: dark ? 0.92 : 0.85,
               }}
             />
             <Drifter width={worldW} dark={dark} top={horizonY * 0.34} />

@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Nunito, system-ui, sans-serif; }
+    a { color: #E67035; } a:hover { color: #C25A26; }
+    .px { image-rendering: pixelated; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #141A32; font-family: Nunito, system-ui, sans-serif;">
+
+  <!-- Scene behind, dimmed -->
+  <div style="position: absolute; inset: 0 0 55% 0; background: linear-gradient(#141A32, #1E2544 60%, #33395E);"></div>
+  <div style="position: absolute; left: 0; right: 0; top: 300px; height: 74px; background:
+      repeating-linear-gradient(to bottom, #66392F 0 2px, #8A5346 2px 12px), #8A5346;"></div>
+  <div style="position: absolute; left: 0; right: 0; top: 374px; bottom: 0; background: #6B6862;"></div>
+  <div style="position: absolute; inset: 0; background: rgba(20,14,8,.62);"></div>
+
+  <!-- ── The card ────────────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 26px; right: 26px; top: 128px; background: #FFFCF7; border-radius: 28px; box-shadow: 0 20px 50px rgba(0,0,0,.45); overflow: hidden;">
+
+    <!-- Portrait plate. Framed like a field photograph, which is what a
+         Field Note is supposed to be. -->
+    <div style="margin: 16px 16px 0; height: 210px; border-radius: 20px; background: linear-gradient(#F6EFE4, #EFE5D6); position: relative; display: flex; align-items: flex-end; justify-content: center; overflow: hidden;">
+      <!-- Rarity burst behind the cat -->
+      <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 190px; height: 190px; border-radius: 50%; background: radial-gradient(circle, rgba(201,162,39,.16), transparent 68%);"></div>
+      <div style="position: absolute; bottom: 26px; width: 88px; height: 15px; border-radius: 50%; background: rgba(48,40,30,.15);"></div>
+      <div class="px" style="width: 168px; height: 168px; background-image: url(./cat_sealpoint.png); background-size: 1008px 168px; background-position: 0 0; margin-bottom: 12px;"></div>
+
+      <div style="position: absolute; top: 12px; left: 12px; background: #C9A227; border-radius: 999px; padding: 4px 11px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #fff; letter-spacing: .4px;">RARE</span>
+      </div>
+      <div style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.9); border-radius: 999px; padding: 4px 11px;">
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10.5px; font-weight: 700; color: #706B67;">Visit 4</span>
+      </div>
+    </div>
+
+    <!-- Identity -->
+    <div style="padding: 18px 22px 0; text-align: center;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 27px; font-weight: 700; color: #2C2A29;">Mochi</div>
+      <div style="font-size: 13.5px; color: #706B67; margin-top: 2px;">Seal Point</div>
+    </div>
+
+    <!-- Why they came. The one line that makes the decorating loop legible
+         without ever quoting a spawn percentage. -->
+    <div style="margin: 16px 22px 0; background: #F6EFE4; border-radius: 16px; padding: 13px 15px; display: flex; align-items: center; gap: 11px;">
+      <img class="px" src="./prop_cat_bed.png" style="width: 40px; height: 40px;">
+      <div>
+        <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 14px; font-weight: 700; color: #2C2A29;">Came for the cat bed.</div>
+        <div style="font-size: 12px; color: #706B67; margin-top: 1px;">Settled in about an hour ago.</div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div style="padding: 16px 22px 22px; display: flex; gap: 10px;">
+      <div style="flex: 1; background: #FAF6F0; border: 1.5px solid #EAE3DA; border-radius: 17px; height: 52px; display: flex; align-items: center; justify-content: center; gap: 7px;">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#706B67" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 4.5A1.5 1.5 0 016.5 3H18a1 1 0 011 1v15a1 1 0 01-1 1H6.5A1.5 1.5 0 015 18.5z"/><path d="M9 8h6M9 12h4"/>
+        </svg>
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 14.5px; font-weight: 700; color: #706B67;">Notes</span>
+      </div>
+      <div style="flex: 1.35; background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 5px 0 #C25A26; border-radius: 17px; height: 52px; display: flex; align-items: center; justify-content: center; gap: 7px;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.5A2.5 2.5 0 015.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0121 8.5v9A2.5 2.5 0 0118.5 20h-13A2.5 2.5 0 013 17.5z"/>
+          <circle cx="12" cy="13" r="3.6"/>
+        </svg>
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 15px; font-weight: 700; color: #fff;">Photograph</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dismiss -->
+  <div style="position: absolute; left: 50%; transform: translateX(-50%); bottom: 62px; width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); display: flex; align-items: center; justify-content: center;">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
