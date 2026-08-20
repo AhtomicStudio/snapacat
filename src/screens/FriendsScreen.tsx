@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  Pressable,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +15,9 @@ import {
   getTimeSince,
   activityEmoji,
 } from '../utils/socialUtils';
-import { CARD_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/styles';
+import { CARD_SHADOW, HIT_SLOP_MD } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
+import { color, space, radius, fontSize, weight, TAP_MIN } from '../theme';
 
 // ---------------------------------------------------------------------------
 // Props & local types
@@ -100,16 +101,22 @@ export function FriendsScreen({
           gap: 12,
         }}
       >
-        <Pressable
+        <Touchable
           onPress={onBack}
           hitSlop={HIT_SLOP_MD}
-          style={({ pressed }) => [
-            pressScale(pressed),
-            { padding: 8, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Back to your Hood"
+          style={{
+            padding: space.sm,
+            minWidth: TAP_MIN,
+            minHeight: TAP_MIN,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginLeft: -space.sm,
+          }}
         >
-          <Text style={{ color: '#FF8E53', fontWeight: '700', fontSize: 18 }}>←</Text>
-        </Pressable>
+          <Text style={{ color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg }}>←</Text>
+        </Touchable>
         <View>
           <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>Friends</Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>
@@ -124,12 +131,14 @@ export function FriendsScreen({
       >
         {/* ── Add Friend ──────────────────────────────────────────────────── */}
         <View
-          style={[
-            CARD_SHADOW,
-            { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 18, marginBottom: 28 },
-          ]}
+          style={{ marginBottom: 28 }}
         >
-          <Text style={{ fontSize: 16, fontWeight: '700', color: '#2C2A29', marginBottom: 14 }}>
+          {/*
+            AddFriend is itself a card. Wrapping it in a second card — which
+            also repeated the heading, so "Add a Friend" appeared twice in a
+            row — gave the section a card inside a card with two paddings.
+          */}
+          <Text style={{ fontSize: fontSize.lg, fontWeight: weight.heavy, color: color.textPrimary, marginBottom: 14 }}>
             Add a Friend
           </Text>
           <AddFriend currentUid={currentUid} onFriendAdded={handleFriendAdded} />
@@ -261,23 +270,25 @@ function FriendCard({
       </View>
 
       {/* Visit Hood button */}
-      <Pressable
+      <Touchable
         onPress={onVisitHood}
-        style={({ pressed }) => [
-          pressScale(pressed, 0.94),
-          {
-            backgroundColor: '#FFE8DC',
-            borderRadius: 12,
-            paddingHorizontal: 14,
-            paddingVertical: 9,
-            minHeight: 36,
-            alignItems: 'center',
-            justifyContent: 'center',
-          },
-        ]}
+        scaleTo={0.94}
+        accessibilityRole="button"
+        accessibilityLabel={`Visit ${friend.username}'s Hood`}
+        style={{
+          backgroundColor: color.gingerLight,
+          borderRadius: radius.sm + 4,
+          paddingHorizontal: 14,
+          paddingVertical: 9,
+          minHeight: 38,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
-        <Text style={{ fontSize: 12, fontWeight: '700', color: '#E67035' }}>Visit 🏡</Text>
-      </Pressable>
+        <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.gingerDark }}>
+          Visit 🏡
+        </Text>
+      </Touchable>
     </View>
   );
 }

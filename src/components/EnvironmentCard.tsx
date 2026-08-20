@@ -3,7 +3,9 @@
  * Shows icon, name, spawn bonus tag, description, and cost/owned badge.
  */
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
+import { Touchable } from './Touchable';
+import { color, radius, shadow, space } from '../theme';
 import type { EnvironmentPreset } from '../types';
 import { pressScale, CARD_SHADOW } from '../utils/styles';
 
@@ -25,23 +27,23 @@ export function EnvironmentCard({
   const isFree = env.cost === 0;
 
   return (
-    <Pressable
+    <Touchable
       onPress={onPress}
-      style={({ pressed }) => [
-        pressScale(pressed, 0.96),
-        CARD_SHADOW,
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          padding: 16,
-          marginBottom: 12,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 14,
-          borderWidth: isActive ? 2 : 1,
-          borderColor: isActive ? '#FF8E53' : 'rgba(234,227,218,0.7)',
-        },
-      ]}
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      style={{
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        padding: space.md,
+        marginBottom: space.sm + 4,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        borderWidth: isActive ? 2 : 1,
+        borderColor: isActive ? color.ginger : color.borderSoft,
+        ...shadow.card,
+      }}
     >
       {/* Icon bubble */}
       <View
@@ -162,6 +164,6 @@ export function EnvironmentCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </Touchable>
   );
 }

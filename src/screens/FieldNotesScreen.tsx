@@ -5,12 +5,15 @@ import {
   TextInput,
   Pressable,
   ScrollView,
+  StyleSheet,
   Alert,
   Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCats, createCat, addScrapbookEntry, saveUserProgression } from '../services/dbService';
 import { CARD_SHADOW, BUTTON_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
+import { color, space, radius, shadow, fontSize, weight, TAP_MIN } from '../theme';
 import type { CatGender, HexColor, UserProgression } from '../types';
 import type { RGB } from '../utils/colorExtractor';
 import { awardPawPoints, PAW_POINT_REWARDS } from '../utils/progressionEngine';
@@ -147,28 +150,23 @@ export function FieldNotesScreen({
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={styles.root}>
       {/* ------------------------------------------------------------------ */}
       {/* Header                                                              */}
       {/* ------------------------------------------------------------------ */}
-      <View className="px-lg py-md border-b border-border bg-card-bg flex-row items-center gap-sm">
-        <Pressable
+      <View style={styles.header}>
+        <Touchable
           onPress={onBack}
           hitSlop={HIT_SLOP_MD}
-          style={({ pressed }) => [
-            pressScale(pressed),
-            { padding: 8, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel and go back"
+          style={styles.backButton}
         >
-          <Text className="text-ginger font-bold text-lg">←</Text>
-        </Pressable>
-        <View>
-          <Text className="text-xl font-bold text-text-primary font-display">
-            Log Field Note
-          </Text>
-          <Text className="text-xs text-text-secondary font-sans mt-xs">
-            Add a new cat sighting to your collection
-          </Text>
+          <Text style={styles.backArrow}>←</Text>
+        </Touchable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.screenTitle}>Log Field Note</Text>
+          <Text style={styles.screenSubtitle}>Add a new cat sighting to your collection</Text>
         </View>
       </View>
 
@@ -212,9 +210,7 @@ export function FieldNotesScreen({
         {/* Cat Name                                                         */}
         {/* ---------------------------------------------------------------- */}
         <View style={GROUP_CARD}>
-          <Text className="text-sm font-bold text-text-secondary mb-xs font-sans">
-            Name
-          </Text>
+          <Text style={styles.fieldLabel}>Name</Text>
           <TextInput
             ref={catNameRef}
             placeholder="e.g. Mochi, Socks…"
@@ -225,7 +221,6 @@ export function FieldNotesScreen({
             onSubmitEditing={() => hoodNameRef.current?.focus()}
             blurOnSubmit={false}
             placeholderTextColor="#706B67"
-            className="text-text-primary font-sans text-base"
             style={{
               backgroundColor: '#FAF6F0',
               borderRadius: 10,
@@ -240,42 +235,25 @@ export function FieldNotesScreen({
         {/* Gender                                                           */}
         {/* ---------------------------------------------------------------- */}
         <View style={GROUP_CARD}>
-          <Text className="text-sm font-bold text-text-secondary mb-sm font-sans">
-            Gender
-          </Text>
-          <View className="flex-row gap-sm">
+          <Text style={[styles.fieldLabel, { marginBottom: space.sm }]}>Gender</Text>
+          <View style={styles.genderRow}>
             {(['male', 'female', 'unknown'] as CatGender[]).map((opt) => {
               const isSelected = gender === opt;
               const label = opt === 'male' ? 'Male ♂' : opt === 'female' ? 'Female ♀' : 'Unknown';
 
               return (
-                <Pressable
+                <Touchable
                   key={opt}
                   onPress={() => setGender(opt)}
-                  style={({ pressed }) => [
-                    pressScale(pressed, 0.96),
-                    {
-                      flex: 1,
-                      minHeight: 44,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      borderRadius: 12,
-                      backgroundColor: isSelected ? '#FF8E53' : '#FAF6F0',
-                      // Ginger border when selected, invisible when not
-                      borderWidth: 1.5,
-                      borderColor: isSelected ? '#FF8E53' : '#EAE3DA',
-                    },
-                    isSelected && BUTTON_SHADOW,
-                  ]}
+                  scaleTo={0.96}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
+                  style={[styles.genderOption, isSelected ? styles.genderOptionActive : null]}
                 >
-                  <Text
-                    className={`font-semibold text-sm font-sans ${
-                      isSelected ? 'text-milk' : 'text-text-secondary'
-                    }`}
-                  >
+                  <Text style={[styles.genderText, isSelected ? styles.genderTextActive : null]}>
                     {label}
                   </Text>
-                </Pressable>
+                </Touchable>
               );
             })}
           </View>
@@ -347,30 +325,13 @@ export function FieldNotesScreen({
               {SPRITE_LIBRARY.map((opt) => {
                 const isSelected = spriteTemplateId === opt.id;
                 return (
-                  <Pressable
+                  <Touchable
                     key={opt.id}
                     onPress={() => setSpriteTemplate(opt.id)}
-                    style={({ pressed }) => [
-                      pressScale(pressed, 0.95),
-                      {
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 12,
-                        minHeight: 44,
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        backgroundColor: isSelected ? '#FFE8DC' : '#FAF6F0',
-                        borderWidth: 1.5,
-                        borderColor: isSelected ? '#FF8E53' : 'rgba(234,227,218,0.8)',
-                      },
-                      isSelected && {
-                        shadowColor: '#FF8E53',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 4,
-                        elevation: 2,
-                      },
-                    ]}
+                    scaleTo={0.95}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    style={[styles.spriteChip, isSelected ? styles.spriteChipActive : null]}
                   >
                     <Text
                       style={{
@@ -393,7 +354,7 @@ export function FieldNotesScreen({
                         />
                       ))}
                     </View>
-                  </Pressable>
+                  </Touchable>
                 );
               })}
             </ScrollView>
@@ -404,9 +365,7 @@ export function FieldNotesScreen({
         {/* Hood Location                                                    */}
         {/* ---------------------------------------------------------------- */}
         <View style={GROUP_CARD}>
-          <Text className="text-sm font-bold text-text-secondary mb-xs font-sans">
-            Hood / Location
-          </Text>
+          <Text style={styles.fieldLabel}>Hood / Location</Text>
           <TextInput
             ref={hoodNameRef}
             placeholder="e.g. Backyard Deck, Parking Lot…"
@@ -417,7 +376,6 @@ export function FieldNotesScreen({
             onSubmitEditing={() => notesRef.current?.focus()}
             blurOnSubmit={false}
             placeholderTextColor="#706B67"
-            className="text-text-primary font-sans text-base"
             style={{
               backgroundColor: '#FAF6F0',
               borderRadius: 10,
@@ -432,9 +390,7 @@ export function FieldNotesScreen({
         {/* Field Notes                                                      */}
         {/* ---------------------------------------------------------------- */}
         <View style={GROUP_CARD}>
-          <Text className="text-sm font-bold text-text-secondary mb-xs font-sans">
-            Notes
-          </Text>
+          <Text style={styles.fieldLabel}>Notes</Text>
           <TextInput
             ref={notesRef}
             placeholder="Describe what the cat is doing, its personality, colors…"
@@ -446,7 +402,6 @@ export function FieldNotesScreen({
             blurOnSubmit
             placeholderTextColor="#706B67"
             textAlignVertical="top"
-            className="text-text-primary font-sans text-base"
             style={{
               backgroundColor: '#FAF6F0',
               borderRadius: 10,
@@ -460,28 +415,11 @@ export function FieldNotesScreen({
         {/* ---------------------------------------------------------------- */}
         {/* Camera / Snapshot Zone (hidden when a photo arrived from camera) */}
         {/* ---------------------------------------------------------------- */}
-        {!capturedPhotoUri && <Pressable
+        {!capturedPhotoUri && <Touchable
           onPress={handleTakePhoto}
-          style={({ pressed }) => [
-            pressScale(pressed, 0.97),
-            CARD_SHADOW,
-            {
-              borderRadius: 16,
-              padding: 16,
-              marginBottom: 12,
-              minHeight: 64,
-              justifyContent: 'center',
-              alignItems: 'center',
-              flexDirection: 'row',
-              gap: 10,
-              backgroundColor: hasPhoto ? '#FFE8DC' : '#FFFFFF',
-              // Dashed border via borderStyle only works on Android; on iOS we
-              // approximate it with a ginger border at reduced opacity
-              borderWidth: 1.5,
-              borderStyle: 'dashed',
-              borderColor: hasPhoto ? '#FF8E53' : 'rgba(234,227,218,0.9)',
-            },
-          ]}
+          scaleTo={0.97}
+          accessibilityRole="button"
+          style={[styles.photoCta, hasPhoto ? styles.photoCtaActive : null]}
         >
           <Text style={{ fontSize: 22 }}>📸</Text>
           <Text
@@ -495,7 +433,7 @@ export function FieldNotesScreen({
               ? 'Photo Captured (Color Extract Active)'
               : 'Take Photo (Extract Signature Colors)'}
           </Text>
-        </Pressable>}
+        </Touchable>}
 
       </ScrollView>
 
@@ -514,44 +452,139 @@ export function FieldNotesScreen({
           backgroundColor: '#FAF6F0',
         }}
       >
-        <Pressable
+        <Touchable
           onPress={onBack}
-          style={({ pressed }) => [
-            pressScale(pressed),
-            CARD_SHADOW,
-            {
-              flex: 1,
-              minHeight: 52,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 14,
-              backgroundColor: '#FFFFFF',
-              borderWidth: 1,
-              borderColor: 'rgba(234,227,218,0.8)',
-            },
-          ]}
+          accessibilityRole="button"
+          style={styles.footerSecondary}
         >
-          <Text className="text-text-secondary font-bold text-base font-sans">Cancel</Text>
-        </Pressable>
+          <Text style={styles.footerSecondaryText}>Cancel</Text>
+        </Touchable>
 
-        <Pressable
+        <Touchable
           onPress={handleSubmit}
-          style={({ pressed }) => [
-            pressScale(pressed, 0.96),
-            BUTTON_SHADOW,
-            {
-              flex: 1,
-              minHeight: 52,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 14,
-              backgroundColor: pressed ? '#E67035' : '#FF8E53',
-            },
-          ]}
+          scaleTo={0.96}
+          accessibilityRole="button"
+          style={styles.footerPrimary}
         >
-          <Text className="text-milk font-bold text-base font-sans">Log Spotting</Text>
-        </Pressable>
+          <Text style={styles.footerPrimaryText}>Log Spotting</Text>
+        </Touchable>
       </View>
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: color.background },
+
+  header: {
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+    backgroundColor: color.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.sm,
+  },
+  backButton: {
+    minWidth: TAP_MIN,
+    minHeight: TAP_MIN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: -space.sm - space.xs,
+  },
+  backArrow: { color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg },
+  screenTitle: { fontSize: fontSize.xl, fontWeight: weight.heavy, color: color.textPrimary },
+  screenSubtitle: { fontSize: fontSize.xs, color: color.textSecondary, marginTop: 2 },
+
+  fieldLabel: {
+    fontSize: fontSize.sm,
+    fontWeight: weight.bold,
+    color: color.textSecondary,
+    marginBottom: space.xs,
+  },
+
+  genderRow: { flexDirection: 'row', gap: space.sm },
+  genderOption: {
+    flex: 1,
+    minHeight: TAP_MIN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.sm + 4,
+    backgroundColor: color.surfaceSunken,
+    borderWidth: 1.5,
+    borderColor: color.border,
+  },
+  genderOptionActive: {
+    backgroundColor: color.ginger,
+    borderColor: color.ginger,
+    ...shadow.button,
+  },
+  genderText: { fontWeight: weight.semibold, fontSize: fontSize.sm, color: color.textSecondary },
+  genderTextActive: { color: color.milk },
+
+  spriteChip: {
+    paddingHorizontal: space.sm + 4,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm + 4,
+    minHeight: TAP_MIN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: color.surfaceSunken,
+    borderWidth: 1.5,
+    borderColor: color.borderSoft,
+  },
+  spriteChipActive: {
+    backgroundColor: color.gingerLight,
+    borderColor: color.ginger,
+    shadowColor: color.ginger,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+
+  photoCta: {
+    borderRadius: radius.md,
+    padding: space.md,
+    marginBottom: space.sm + 4,
+    minHeight: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: space.sm + 2,
+    backgroundColor: color.surface,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: color.borderSoft,
+    ...shadow.card,
+  },
+  photoCtaActive: { backgroundColor: color.gingerLight, borderColor: color.ginger },
+
+  footerSecondary: {
+    flex: 1,
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.sm + 6,
+    backgroundColor: color.surface,
+    borderWidth: 1,
+    borderColor: color.borderSoft,
+    ...shadow.card,
+  },
+  footerSecondaryText: {
+    color: color.textSecondary,
+    fontWeight: weight.bold,
+    fontSize: fontSize.base,
+  },
+  footerPrimary: {
+    flex: 1,
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.sm + 6,
+    backgroundColor: color.ginger,
+    ...shadow.button,
+  },
+  footerPrimaryText: { color: color.milk, fontWeight: weight.bold, fontSize: fontSize.base },
+});

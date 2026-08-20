@@ -1,5 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { View, Text, ScrollView } from 'react-native';
+import { Touchable } from '../components/Touchable';
+import { color, space, fontSize, weight, TAP_MIN } from '../theme';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Cat, ScrapbookEntry } from '../types';
 import { getSpriteTemplateColors } from '../utils/colorExtractor';
@@ -57,16 +59,22 @@ export function ScrapbookScreen({ cat, onBack }: ScrapbookScreenProps) {
           gap: 12,
         }}
       >
-        <Pressable
+        <Touchable
           onPress={onBack}
           hitSlop={HIT_SLOP_MD}
-          style={({ pressed }) => [
-            pressScale(pressed),
-            { padding: 8, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Back to the Cat-a-log"
+          style={{
+            padding: space.sm,
+            minWidth: TAP_MIN,
+            minHeight: TAP_MIN,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginLeft: -space.sm,
+          }}
         >
-          <Text style={{ color: '#FF8E53', fontWeight: '700', fontSize: 18 }}>←</Text>
-        </Pressable>
+          <Text style={{ color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg }}>←</Text>
+        </Touchable>
         <View>
           <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>{cat.name}</Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>Scrapbook</Text>

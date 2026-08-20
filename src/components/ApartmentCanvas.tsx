@@ -8,10 +8,126 @@
  * spots — dashed "+" when empty, the placed item's emoji when filled.
  */
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, Text, Pressable } from 'react-native';
+import { Animated, Easing, View, Text, Pressable } from 'react-native';
 import { APARTMENT_SLOTS } from '../config/apartment';
 import { PLACEABLE_ITEMS, MAX_HOOD_CATS } from '../utils/spawnCalculator';
-import { CatSlot } from './HoodCanvas';
+import { CatSprite } from './CatSprite';
+import { color, space, radius, fontSize, weight } from '../theme';
+
+// ---------------------------------------------------------------------------
+// CatSlot
+// ---------------------------------------------------------------------------
+
+/**
+ * One perch in the room.
+ *
+ * Previously imported from HoodCanvas, which has been retired — the outdoor
+ * Hood renders through HoodScene now, and HoodCanvas existed only to serve
+ * these two consumers. Rather than keep a whole module alive for one component,
+ * the perch lives with the only canvas that still uses it.
+ */
+function CatSlotInner({
+  index,
+  isOccupied,
+  offset,
+  sleeping = false,
+  spriteId,
+  pending = false,
+}: {
+  index: number;
+  isOccupied: boolean;
+  /** Perch position, percent from left/bottom. */
+  offset?: { left: number; bottom: number };
+  sleeping?: boolean;
+  spriteId?: string;
+  /** Sprite ids are still resolving — hold the empty perch, don't flash. */
+  pending?: boolean;
+}) {
+  const { left, bottom } = offset ?? { left: 0, bottom: 0 };
+  const bob = useRef(new Animated.Value(0)).current;
+
+  // Sprites carry their own breathing loop; bobbing them as well reads as a hop
+  // rather than a breath, so the transform is detached entirely when a real
+  // sprite is present.
+  const usesBob = isOccupied && !sleeping && !spriteId && !pending;
+
+  useEffect(() => {
+    if (!usesBob) {
+      bob.stopAnimation();
+      bob.setValue(0);
+      return;
+    }
+    let loop: Animated.CompositeAnimation | null = null;
+    const timer = setTimeout(() => {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(bob, { toValue: -5, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.timing(bob, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+          Animated.delay(600 + index * 100),
+        ]),
+      );
+      loop.start();
+    }, index * 280);
+
+    return () => {
+      clearTimeout(timer);
+      // Stopping the loop directly, rather than relying on stopAnimation to
+      // propagate through it, is what actually halts the iteration.
+      loop?.stop();
+      bob.stopAnimation();
+    };
+    // bob is a stable ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usesBob, index]);
+
+  const showCat = isOccupied && !pending;
+
+  return (
+    <Animated.View
+      style={[
+        { position: 'absolute', left: `${left}%`, bottom: `${bottom}%`, alignItems: 'center' },
+        usesBob ? { transform: [{ translateY: bob }] } : null,
+      ]}
+    >
+      {showCat ? (
+        <View
+          style={{ alignItems: 'center' }}
+          // Decorative. importantForAccessibility is Android-only, so iOS needs
+          // the companion prop or its screen reader still announces the 💤.
+          importantForAccessibility="no-hide-descendants"
+          accessibilityElementsHidden
+        >
+          {sleeping && (
+            <Text style={{ position: 'absolute', top: -12, right: -14, fontSize: 13, opacity: 0.85 }}>
+              💤
+            </Text>
+          )}
+          {spriteId ? (
+            <CatSprite spriteId={spriteId} size={44} animation={sleeping ? 'sleep' : 'idle'} phase={index} />
+          ) : (
+            <Text style={{ fontSize: 36 }}>🐱</Text>
+          )}
+        </View>
+      ) : (
+        // Vacant perch: a warm dashed ring, never a cold grey one.
+        <View
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            borderWidth: 2,
+            borderStyle: 'dashed',
+            borderColor: color.gingerLight,
+            opacity: 0.3,
+          }}
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+/** Memoised — the room re-renders on every placement and lighting change. */
+const CatSlot = React.memo(CatSlotInner);
 
 // Cat perches arranged for the room (percent from left / bottom).
 // Order = fill order: first cats appear in the most natural spots.
@@ -149,13 +265,16 @@ export function ApartmentCanvas({
         height: 300,
         backgroundColor: wall,
         overflow: 'hidden',
+        position: 'relative',
+        marginHorizontal: space.lg,
+        marginTop: space.lg,
+        borderRadius: radius.md,
         shadowColor: '#2C2A29',
         shadowOffset: { width: 0, height: 12 },
         shadowOpacity: 0.10,
         shadowRadius: 16,
         elevation: 5,
       }}
-      className="mx-lg mt-lg rounded-2xl relative"
     >
       {/* ── Floor (bottom 30%) ─────────────────────────────────────────── */}
       <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%', backgroundColor: floor }}>
@@ -315,18 +434,32 @@ export function ApartmentCanvas({
 
       {/* ── Top-right badge ────────────────────────────────────────────── */}
       <View
-        className="absolute top-sm right-sm rounded-full px-sm py-xs flex-row items-center gap-xs"
-        style={{ backgroundColor: 'rgba(250,246,240,0.92)', borderWidth: 1, borderColor: 'rgba(234,227,218,0.5)' }}
+        style={{
+          position: 'absolute',
+          top: space.sm,
+          right: space.sm,
+          borderRadius: radius.full,
+          paddingHorizontal: space.sm + 2,
+          paddingVertical: space.xs + 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.xs,
+          backgroundColor: 'rgba(250,246,240,0.92)',
+          borderWidth: 1,
+          borderColor: 'rgba(234,227,218,0.5)',
+        }}
       >
         {readOnly ? (
           <>
             <Text style={{ fontSize: 12 }}>👁</Text>
-            <Text className="text-xs font-bold text-text-secondary">View only</Text>
+            <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textSecondary }}>
+              View only
+            </Text>
           </>
         ) : (
           <>
             <Text style={{ fontSize: 12 }}>🐱</Text>
-            <Text className="text-xs font-bold text-text-primary">
+            <Text style={{ fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textPrimary }}>
               {expectedCats}/{MAX_HOOD_CATS}
             </Text>
           </>

@@ -3,9 +3,10 @@
  * Shows gradient swatch, name, description, cost/owned badge, and unlock CTA.
  */
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
 import type { Theme } from '../types';
-import { pressScale, CARD_SHADOW } from '../utils/styles';
+import { Touchable } from './Touchable';
+import { color, radius, shadow, space } from '../theme';
 
 interface ThemePreviewCardProps {
   theme: Theme;
@@ -29,21 +30,21 @@ export function ThemePreviewCard({
   const isFree = theme.cost === 0;
 
   return (
-    <Pressable
+    <Touchable
       onPress={onPress}
       disabled={isActive}
-      style={({ pressed }) => [
-        pressScale(pressed, 0.96),
-        CARD_SHADOW,
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 20,
-          overflow: 'hidden',
-          marginBottom: 12,
-          borderWidth: isActive ? 2 : 1,
-          borderColor: isActive ? '#FF8E53' : 'rgba(234,227,218,0.7)',
-        },
-      ]}
+      scaleTo={0.96}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isActive }}
+      style={{
+        backgroundColor: color.surface,
+        borderRadius: radius.lg,
+        overflow: 'hidden',
+        marginBottom: space.sm + 4,
+        borderWidth: isActive ? 2 : 1,
+        borderColor: isActive ? color.ginger : color.borderSoft,
+        ...shadow.card,
+      }}
     >
       {/* Gradient swatch — two-tone approximation via layered Views */}
       <View
@@ -189,6 +190,6 @@ export function ThemePreviewCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </Touchable>
   );
 }

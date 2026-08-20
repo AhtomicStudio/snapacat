@@ -3,7 +3,7 @@ import {
   View,
   Text,
   FlatList,
-  Pressable,
+  StyleSheet,
   TextInput,
   ActivityIndicator,
   RefreshControl,
@@ -12,7 +12,19 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getCats } from '../services/dbService';
 import { getSpriteTemplateColors } from '../utils/colorExtractor';
 import { getSpriteById, RARITY_STARS } from '../utils/spriteLibrary';
-import { CARD_SHADOW, BUTTON_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/styles';
+import { HIT_SLOP_MD } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
+import {
+  color,
+  space,
+  radius,
+  text,
+  shadow,
+  pill,
+  fontSize,
+  weight,
+  TAP_MIN,
+} from '../theme';
 import type { Cat } from '../types';
 
 type SortMode = 'recent' | 'alpha';
@@ -102,32 +114,18 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
     const hoods = [...new Set(item.scrapbook.map((e) => e.hood_name).filter(Boolean))];
 
     return (
-      <Pressable
+      <Touchable
         onPress={() => onViewScrapbook(item)}
-        style={({ pressed }) => [
-          CARD_SHADOW,
-          pressScale(pressed, 0.98),
-          {
-            backgroundColor: '#FFFFFF',
-            borderRadius: 20,
-            marginBottom: 16,
-            padding: 16,
-            // Warm hairline instead of a hard border
-            borderWidth: 1,
-            borderColor: pressed ? '#FFAAA6' : 'rgba(234,227,218,0.6)',
-          },
-        ]}
+        scaleTo={0.98}
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, open scrapbook`}
+        style={styles.catCard}
       >
         {/* Card header */}
-        <View className="flex-row justify-between items-center mb-sm">
-          <Text className="text-xl font-bold text-text-primary font-display">
-            {item.name}
-          </Text>
-          <View
-            className="px-sm py-xs rounded-full"
-            style={{ backgroundColor: badge.bg }}
-          >
-            <Text className="text-xs font-semibold text-text-primary">{badge.label}</Text>
+        <View style={styles.cardHeader}>
+          <Text style={styles.catName}>{item.name}</Text>
+          <View style={[pill, { backgroundColor: badge.bg }]}>
+            <Text style={styles.badgeLabel}>{badge.label}</Text>
           </View>
         </View>
 
@@ -204,8 +202,8 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
         </View>
 
         {/* Card footer */}
-        <View className="flex-row justify-between items-center mt-sm">
-          <Text className="text-sm text-text-secondary font-sans">
+        <View style={styles.cardFooter}>
+          <Text style={text.secondary}>
             {sightingCount === 0
               ? 'No Field Notes yet'
               : `${sightingCount} Field Note${sightingCount === 1 ? '' : 's'}`}
@@ -213,69 +211,46 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
 
           {/* Tapping the card already fires onViewScrapbook; this label
               is a visual affordance, not a second pressable region. */}
-          <View
-            className="rounded-xl py-sm px-md flex-row items-center gap-xs"
-            style={{ backgroundColor: '#FFE8DC', minHeight: 36 }}
-          >
-            <Text className="text-ginger-dark font-semibold text-sm">
-              View Scrapbook →
-            </Text>
+          <View style={styles.scrapbookChip}>
+            <Text style={styles.scrapbookChipText}>View Scrapbook →</Text>
           </View>
         </View>
-      </Pressable>
+      </Touchable>
     );
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-background">
+    <SafeAreaView style={styles.root}>
       {/* Header */}
-      <View
-        className="flex-row justify-between items-center px-lg py-md border-b border-border bg-card-bg"
-      >
-        <View className="flex-row items-center gap-md">
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
           {onBack && (
-            <Pressable
+            <Touchable
               onPress={onBack}
               hitSlop={HIT_SLOP_MD}
               accessibilityRole="button"
               accessibilityLabel="Back to your Hood"
-              style={({ pressed }) => [
-                pressScale(pressed),
-                { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-              ]}
+              style={styles.backButton}
             >
-              <Text className="text-ginger font-bold text-lg">←</Text>
-            </Pressable>
+              <Text style={styles.backArrow}>←</Text>
+            </Touchable>
           )}
-          <View>
-            <Text className="text-title font-bold text-text-primary font-display">
-              Cat-a-log
-            </Text>
-            <Text className="text-sm text-text-secondary font-sans mt-xs">
-              Spotted cats in the neighborhood
-            </Text>
+          <View style={styles.headerTitles}>
+            <Text style={styles.screenTitle}>Cat-a-log</Text>
+            <Text style={styles.screenSubtitle}>Spotted cats in the neighborhood</Text>
           </View>
         </View>
 
-        {/* Primary CTA — scale + ginger button shadow */}
-        <Pressable
+        <Touchable
           onPress={onLogSpotting}
           hitSlop={HIT_SLOP_MD}
-          style={({ pressed }) => [
-            BUTTON_SHADOW,
-            pressScale(pressed, 0.95),
-            {
-              backgroundColor: pressed ? '#E67035' : '#FF8E53',
-              borderRadius: 12,
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              minHeight: 44,
-              justifyContent: 'center',
-            },
-          ]}
+          scaleTo={0.95}
+          accessibilityRole="button"
+          accessibilityLabel="Log a new sighting"
+          style={styles.primaryButton}
         >
-          <Text className="text-milk font-bold text-sm">+ Spotting</Text>
-        </Pressable>
+          <Text style={styles.primaryButtonText}>+ Spotting</Text>
+        </Touchable>
       </View>
 
       {/* Search bar */}
@@ -307,25 +282,18 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
           const isActive = sortMode === mode;
           const label = mode === 'recent' ? 'Recent' : 'A – Z';
           return (
-            <Pressable
+            <Touchable
               key={mode}
               onPress={() => setSortMode(mode)}
-              style={({ pressed }) => [
-                pressScale(pressed, 0.94),
-                {
-                  paddingHorizontal: 14,
-                  paddingVertical: 6,
-                  borderRadius: 99,
-                  backgroundColor: isActive ? '#FFE8DC' : '#FAF6F0',
-                  borderWidth: 1.5,
-                  borderColor: isActive ? '#FF8E53' : '#EAE3DA',
-                },
-              ]}
+              scaleTo={0.94}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.sortChip, isActive ? styles.sortChipActive : null]}
             >
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#E67035' : '#706B67' }}>
+              <Text style={[styles.sortChipText, isActive ? styles.sortChipTextActive : null]}>
                 {label}
               </Text>
-            </Pressable>
+            </Touchable>
           );
         })}
         <View style={{ flex: 1, alignItems: 'flex-end' }}>
@@ -337,8 +305,8 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
 
       {/* Body */}
       {loading ? (
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#FF8E53" />
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={color.ginger} />
         </View>
       ) : (
         <FlatList
@@ -368,29 +336,14 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
               <Text style={{ fontSize: 14, color: '#706B67', marginTop: 6, textAlign: 'center', lineHeight: 20 }}>
                 Head outside and log your first neighborhood cat sighting.
               </Text>
-              <Pressable
+              <Touchable
                 onPress={onLogSpotting}
-                style={({ pressed }) => [
-                  pressScale(pressed, 0.95),
-                  {
-                    marginTop: 24,
-                    backgroundColor: pressed ? '#E67035' : '#FF8E53',
-                    borderRadius: 14,
-                    paddingHorizontal: 28,
-                    paddingVertical: 14,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    shadowColor: '#FF8E53',
-                    shadowOffset: { width: 0, height: 4 },
-                    shadowOpacity: 0.35,
-                    shadowRadius: 10,
-                    elevation: 6,
-                  },
-                ]}
+                scaleTo={0.95}
+                accessibilityRole="button"
+                style={styles.emptyCta}
               >
-                <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFFFFF' }}>+ Log Sighting</Text>
-              </Pressable>
+                <Text style={styles.emptyCtaText}>+ Log Sighting</Text>
+              </Touchable>
             </View>
           )}
         />
@@ -398,3 +351,124 @@ export function CatalogScreen({ userId, onLogSpotting, onViewScrapbook, onBack }
     </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: color.background },
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    // Centre-aligned so the back arrow, the title block and the CTA share one
+    // axis. The arrow used to float between the two title lines.
+    alignItems: 'center',
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderBottomWidth: 1,
+    borderBottomColor: color.border,
+    backgroundColor: color.surface,
+    gap: space.sm,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flex: 1 },
+  headerTitles: { flex: 1 },
+  backButton: {
+    minWidth: TAP_MIN,
+    minHeight: TAP_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Pulls the glyph's optical edge back to the gutter; a 44pt tap target
+    // otherwise indents the title by its own padding.
+    marginLeft: -space.sm - space.xs,
+  },
+  backArrow: { color: color.ginger, fontWeight: weight.bold, fontSize: fontSize.lg },
+  screenTitle: { fontSize: fontSize.xxl, fontWeight: weight.heavy, color: color.textPrimary },
+  screenSubtitle: { fontSize: fontSize.xs, color: color.textSecondary, marginTop: 2 },
+
+  primaryButton: {
+    backgroundColor: color.ginger,
+    borderRadius: radius.sm + 4,
+    paddingHorizontal: space.md,
+    paddingVertical: 10,
+    minHeight: TAP_MIN,
+    justifyContent: 'center',
+    ...shadow.button,
+  },
+  primaryButtonText: { color: color.milk, fontWeight: weight.heavy, fontSize: fontSize.sm },
+
+  // ── Cat card ─────────────────────────────────────────────────────────────
+  catCard: {
+    backgroundColor: color.surface,
+    borderRadius: radius.lg,
+    marginBottom: space.md,
+    padding: space.md,
+    borderWidth: 1,
+    borderColor: color.borderSoft,
+    ...shadow.card,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.sm,
+    gap: space.sm,
+  },
+  catName: {
+    fontSize: fontSize.xl,
+    fontWeight: weight.bold,
+    color: color.textPrimary,
+    flexShrink: 1,
+  },
+  badgeLabel: { fontSize: fontSize.xs, fontWeight: weight.semibold, color: color.textPrimary },
+
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: space.sm,
+    gap: space.sm,
+  },
+  scrapbookChip: {
+    // The chip stretched to full width before, because a View in a column
+    // parent fills it unless told not to. This is the whole fix.
+    alignSelf: 'flex-start',
+    backgroundColor: color.gingerLight,
+    borderRadius: radius.sm + 4,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    minHeight: 36,
+    justifyContent: 'center',
+  },
+  scrapbookChipText: {
+    color: color.gingerDark,
+    fontWeight: weight.semibold,
+    fontSize: fontSize.sm,
+  },
+
+  // ── Sort ─────────────────────────────────────────────────────────────────
+  sortChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: color.surfaceSunken,
+    borderWidth: 1.5,
+    borderColor: color.border,
+  },
+  sortChipActive: { backgroundColor: color.gingerLight, borderColor: color.ginger },
+  sortChipText: { fontSize: fontSize.xs, fontWeight: weight.bold, color: color.textSecondary },
+  sortChipTextActive: { color: color.gingerDark },
+
+  // ── States ───────────────────────────────────────────────────────────────
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  emptyCta: {
+    marginTop: space.lg,
+    backgroundColor: color.ginger,
+    borderRadius: radius.sm + 6,
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    minHeight: TAP_MIN,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadow.button,
+  },
+  emptyCtaText: { fontSize: fontSize.base, fontWeight: weight.heavy, color: color.milk },
+});

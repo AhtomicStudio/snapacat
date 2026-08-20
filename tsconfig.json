@@ -12,8 +12,8 @@
     "esModuleInterop": true,
     "lib": ["ES2022"],
     "skipLibCheck": true,
-    "types": ["react-native", "nativewind/types", "jest"]
+    "types": ["react-native", "jest"]
   },
-  "include": ["src", "App.tsx", "index.js", "nativewind-env.d.ts"],
-  "exclude": ["node_modules", "babel.config.js", "metro.config.js", "tailwind.config.js"]
+  "include": ["src", "App.tsx", "index.js"],
+  "exclude": ["node_modules", "babel.config.js", "metro.config.js"]
 }

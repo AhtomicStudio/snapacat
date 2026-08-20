@@ -3,7 +3,9 @@
  * Shows emoji, tier badge, name, spawn bonus, cost, and CTA.
  */
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
+import { Touchable } from './Touchable';
+import { color, radius, shadow, space } from '../theme';
 import type { ItemTier } from '../types';
 import type { PlaceableItemDef } from '../utils/spawnCalculator';
 import { pressScale, CARD_SHADOW } from '../utils/styles';
@@ -46,24 +48,23 @@ export function ShopItemCard({
   const isFree = item.cost === 0;
 
   return (
-    <Pressable
+    <Touchable
       onPress={onPress}
       disabled={isOwned}
-      style={({ pressed }) => [
-        pressScale(pressed, 0.96),
-        CARD_SHADOW,
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 18,
-          padding: 14,
-          marginBottom: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          borderWidth: 1,
-          borderColor: tier.ring,
-        },
-      ]}
+      scaleTo={0.96}
+      accessibilityRole="button"
+      style={{
+        backgroundColor: color.surface,
+        borderRadius: radius.md + 2,
+        padding: 14,
+        marginBottom: space.sm + 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.sm + 4,
+        borderWidth: 1,
+        borderColor: tier.ring,
+        ...shadow.card,
+      }}
     >
       {/* Emoji bubble */}
       <View
@@ -148,6 +149,6 @@ export function ShopItemCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </Touchable>
   );
 }

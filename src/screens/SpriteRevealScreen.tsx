@@ -17,7 +17,8 @@ import {
   PATTERN_LABELS,
   SPRITE_LIBRARY,
 } from '../utils/spriteLibrary';
-import { BUTTON_SHADOW } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
+import { color, radius, shadow } from '../theme';
 
 type RevealPhase = 'analyzing' | 'revealed';
 
@@ -381,21 +382,21 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
               width: 288, marginTop: 26,
             }}
           >
-            <Pressable
+            <Touchable
               onPress={handleContinue}
-              style={({ pressed }) => [
-                BUTTON_SHADOW,
-                {
-                  backgroundColor: pressed ? '#E67035' : '#FF8E53',
-                  borderRadius: 20, paddingVertical: 18,
-                  alignItems: 'center',
-                },
-              ]}
+              accessibilityRole="button"
+              style={{
+                backgroundColor: color.ginger,
+                borderRadius: radius.lg - 4,
+                paddingVertical: 18,
+                alignItems: 'center',
+                ...shadow.button,
+              }}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: '900', fontSize: 17, letterSpacing: 0.3 }}>
+              <Text style={{ color: color.milk, fontWeight: '900', fontSize: 17, letterSpacing: 0.3 }}>
                 Log This Sighting →
               </Text>
-            </Pressable>
+            </Touchable>
           </Animated.View>
 
         </View>
