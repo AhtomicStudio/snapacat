@@ -28,6 +28,26 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..', '..');
 const PORT = Number(process.env.PORT) || 4178;
 
+/**
+ * The only directories this tool will serve.
+ *
+ * It started out serving the whole repository, which is more than it needs and
+ * more than is wise: `/.git/config`, `/google-services.json` and everything
+ * under `node_modules` were all reachable. Binding to loopback is not the
+ * protection it looks like — any page open in a browser on this machine can
+ * make requests to 127.0.0.1, and DNS rebinding turns that into a read of
+ * whatever the server will hand out. A review harness needs the harness and
+ * the sheets, so that is all it gets.
+ */
+const SERVABLE = ['scripts/sprites', 'src/assets/sprites'].map((p) => path.resolve(ROOT, p));
+
+/** True when `target` is inside `dir` — and not merely prefixed by its name. */
+function isInside(target, dir) {
+  // `startsWith(dir)` alone says yes to "<dir>Evil/x", which is the oldest
+  // path-containment bug there is.
+  return target === dir || target.startsWith(dir + path.sep);
+}
+
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -38,13 +58,41 @@ const TYPES = {
 };
 
 const server = http.createServer((req, res) => {
-  // Strip the query, decode, and normalise. Resolving against ROOT and then
-  // checking the result is still inside it is what stops `../../..` escaping.
-  const raw = decodeURIComponent((req.url || '/').split('?')[0]);
+  /**
+   * Only answer to a loopback name.
+   *
+   * A browser will happily resolve an attacker-controlled hostname to
+   * 127.0.0.1 and then treat this server as that origin, which is how a web
+   * page reads from a local dev server it has no business touching. Checking
+   * the Host header costs nothing and takes the easy version of that off the
+   * table.
+   */
+  const host = (req.headers.host || '').replace(/:\d+$/, '');
+  if (host !== '127.0.0.1' && host !== 'localhost' && host !== '[::1]') {
+    res.writeHead(403).end('loopback only');
+    return;
+  }
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405).end('read only');
+    return;
+  }
+
+  // Strip the query, decode, and normalise. posix.normalize drops leading
+  // `..` segments on an absolute path, so a traversal attempt lands inside
+  // ROOT rather than above it — but the containment check below is what the
+  // guarantee actually rests on, not that.
+  let raw;
+  try {
+    raw = decodeURIComponent((req.url || '/').split('?')[0]);
+  } catch {
+    res.writeHead(400).end('bad path');
+    return;
+  }
   const target = path.resolve(ROOT, '.' + path.posix.normalize(raw));
 
-  if (!target.startsWith(ROOT)) {
-    res.writeHead(403).end('outside the repo');
+  if (!SERVABLE.some((dir) => isInside(target, dir))) {
+    res.writeHead(403).end('not a servable path');
     return;
   }
 
@@ -64,5 +112,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log(`sprite preview → http://127.0.0.1:${PORT}/scripts/sprites/preview.html`);
+  console.log(`serving only: ${SERVABLE.map((d) => path.relative(ROOT, d)).join(", ")}`);
   console.log('ctrl-c to stop');
 });
