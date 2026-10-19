@@ -31,7 +31,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, Text, View, type ViewStyle } from 'react-native';
-import { CatSprite } from './CatSprite';
+import { SettledCatSprite, WalkingCatSprite } from './CatSprite';
+import { useCatLife } from '../hooks/useCatLife';
 import { Touchable } from './Touchable';
 import { PLACEABLE_ITEMS, MAX_HOOD_CATS } from '../utils/spawnCalculator';
 import { getPropSheet } from '../assets/props';
@@ -46,6 +47,8 @@ import {
 } from '../config/scene';
 import { skyPalette, isDark, type TimeOfDay } from '../utils/timeOfDay';
 import { getDressing, type SceneDressing } from '../config/sceneDressing';
+import { propLight, propMotion } from '../config/propMotion';
+import { Clouds, Fireflies, LightPool, Motes, StarField, moteStyleFor } from './SceneAmbience';
 
 // ---------------------------------------------------------------------------
 // Sizing
@@ -444,6 +447,15 @@ function ContactShadow({ size, dark }: { size: number; dark: boolean }) {
 // Actors
 // ---------------------------------------------------------------------------
 
+/**
+ * One visiting cat, with a life of its own.
+ *
+ * The actor box is positioned from the scene's static placement and then
+ * translated by whatever useCatLife is doing, so the layout stays pure and the
+ * wandering is a presentation concern laid over it. That separation is worth
+ * keeping: layoutScene remains testable without a clock, and a cat that walks
+ * off somewhere unexpected is a bug in exactly one module.
+ */
 function SceneCat({
   placement,
   spriteId,
@@ -452,6 +464,10 @@ function SceneCat({
   top,
   dark,
   asleep,
+  seed,
+  worldWidth,
+  sceneHeight,
+  alive,
   onPress,
 }: {
   placement: CatPlacement;
@@ -461,53 +477,140 @@ function SceneCat({
   top: number;
   dark: boolean;
   asleep: boolean;
+  seed: number;
+  worldWidth: number;
+  sceneHeight: number;
+  /** Friend Hoods and unmeasured scenes hold still. */
+  alive: boolean;
   onPress: () => void;
 }) {
+  const { activity, transform, depth } = useCatLife({
+    seed,
+    slot: placement.slot,
+    baseDepth: placement.z,
+    worldWidth,
+    sceneHeight,
+    asleep,
+    enabled: alive,
+  });
+
   return (
-    <Touchable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="A visiting cat"
-      // Scale on the whole actor, shadow included, so the press reads as the cat
-      // reacting rather than the sprite detaching from the ground.
-      pressedStyle={{ transform: [{ scale: 1.07 }] }}
+    /**
+     * Two boxes, because two different things want to transform this cat.
+     *
+     * The outer one carries the drift, natively driven. The inner one carries
+     * the press feedback. Putting both on one box means whichever writes
+     * `transform` last wins — and since the press style is applied on top, a
+     * tap would snap a walking cat back to its starting spot for as long as
+     * the finger was down.
+     */
+    <Animated.View
       style={{
         position: 'absolute',
         left,
         top,
         width: size,
         height: size,
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        zIndex: Math.round(placement.z * 1000),
+        zIndex: Math.round(depth * 1000),
+        transform,
       }}
     >
-      <ContactShadow size={size} dark={dark} />
-      {spriteId ? (
-        <CatSprite
-          spriteId={spriteId}
-          size={size}
-          animation={asleep ? 'sleep' : 'idle'}
-          phase={placement.slot}
-        />
-      ) : (
-        <Text style={{ fontSize: size * 0.78, textAlign: 'center' }}>🐱</Text>
-      )}
-      {asleep && (
-        <Text
-          style={{
-            position: 'absolute',
-            top: -size * 0.02,
-            right: -size * 0.02,
-            fontSize: size * 0.2,
-            opacity: 0.9,
-          }}
-        >
-          💤
-        </Text>
-      )}
-    </Touchable>
+      <Touchable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="A visiting cat"
+        // Scale the whole actor, shadow included, so the press reads as the cat
+        // reacting rather than the sprite detaching from the ground.
+        pressedStyle={{ transform: [{ scale: 1.07 }] }}
+        style={{
+          width: size,
+          height: size,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <ContactShadow size={size} dark={dark} />
+        {spriteId ? (
+          activity.kind === 'walking' ? (
+            <WalkingCatSprite
+              spriteId={spriteId}
+              size={size}
+              direction={activity.direction}
+              animation={activity.animation}
+              phase={placement.slot}
+            />
+          ) : (
+            <SettledCatSprite
+              spriteId={spriteId}
+              size={size}
+              animation={activity.animation}
+              phase={placement.slot}
+            />
+          )
+        ) : (
+          <Text style={{ fontSize: size * 0.78, textAlign: 'center' }}>🐱</Text>
+        )}
+        {asleep && (
+          <Text
+            style={{
+              position: 'absolute',
+              top: -size * 0.02,
+              right: -size * 0.02,
+              fontSize: size * 0.2,
+              opacity: 0.9,
+            }}
+          >
+            💤
+          </Text>
+        )}
+      </Touchable>
+    </Animated.View>
   );
+}
+
+/**
+ * Idle motion for a goodie that is meant to move — a chime swaying, a laser
+ * dot hovering.
+ *
+ * Returns a transform array rather than wrapping the prop, so the caller keeps
+ * control of where the prop sits and this only ever contributes movement.
+ * `still` props get an empty array and no animation is started at all, which
+ * matters because most of the twenty-five are still.
+ */
+function usePropDrift(itemId: string, phase: number) {
+  const motion = useMemo(() => propMotion(itemId), [itemId]);
+  const t = useRef(new Animated.Value(0)).current;
+  const animated = motion.kind !== 'still';
+
+  useEffect(() => {
+    if (!animated) return undefined;
+    // Start part-way through so two of the same prop in one Hood are never in
+    // step. Seeding the value rather than delaying the start is fine here —
+    // unlike a sprite's frame loop, a sine has no frames to clip.
+    t.setValue((phase % 7) / 7);
+    const loop = Animated.loop(
+      Animated.timing(t, {
+        toValue: 1,
+        duration: motion.periodMs,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t, animated, motion, phase]);
+
+  return useMemo(() => {
+    if (motion.kind === 'still') return [];
+    // Four stops make a round trip that eases at the extremes, which is what a
+    // pendulum does; a two-stop ramp reads as a conveyor belt.
+    const swing = [0, motion.amplitude, 0, -motion.amplitude, 0];
+    const value = t.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: swing,
+    });
+    return motion.kind === 'sway' ? [{ translateX: value }] : [{ translateY: value }];
+  }, [motion, t]);
 }
 
 function SceneItem({
@@ -526,6 +629,8 @@ function SceneItem({
   /** Absent on read-only Hoods. */
   onPress?: () => void;
 }) {
+  const drift = usePropDrift(placement.itemId, Math.round(placement.x * 100));
+  const light = useMemo(() => propLight(placement.itemId), [placement.itemId]);
   const def = PLACEABLE_ITEMS.find((i) => i.item_id === placement.itemId);
   if (!def) return null;
 
@@ -533,16 +638,27 @@ function SceneItem({
 
   const body = (
     <>
+      {/* Under the prop and under its shadow, so the prop reads as the source
+          of the light rather than as something sitting in it. */}
+      {dark && light && (
+        <LightPool
+          size={size}
+          colour={light.color}
+          spread={light.spread}
+          flicker={light.flicker}
+          phase={Math.round(placement.x * 100)}
+        />
+      )}
       <ContactShadow size={size} dark={dark} />
       {art ? (
-        <Image
+        <Animated.Image
           source={art}
           // Nearest-neighbour is the whole point: the sheets ship pre-upscaled
           // 4×, and letting the GPU smooth them would blur the keyline that
           // makes props sit with the cats.
           resizeMode="contain"
           fadeDuration={0}
-          style={{ width: size, height: size }}
+          style={{ width: size, height: size, transform: drift }}
         />
       ) : (
         // Only reachable if an item ships without authored art.
@@ -590,34 +706,44 @@ function SceneItem({
 // Ambience
 // ---------------------------------------------------------------------------
 
-function Drifter({ width, dark, top }: { width: number; dark: boolean; top: number }) {
-  const x = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(x, {
-        toValue: 1,
-        duration: 96000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [x]);
-
-  const translateX = x.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-160, width + 160],
-  });
+/**
+ * The sun or moon, with the glow it throws into the sky around it.
+ *
+ * The glow is what stops it reading as a sticker. A flat disc on a banded
+ * gradient is the single most obviously-drawn thing in a sky; two faint rings
+ * behind it cost nothing and make it sit in the air instead of on top of it.
+ */
+function Luminary({ dark, left, top }: { dark: boolean; left: number; top: number }) {
+  const size = dark ? 38 : 52;
+  const colour = dark ? '#EFF1FF' : '#FFF0BE';
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={{ position: 'absolute', top, left: 0, transform: [{ translateX }] }}
-    >
-      <Text style={{ fontSize: 34, opacity: dark ? 0.22 : 0.45 }}>{dark ? '✧' : '☁️'}</Text>
-    </Animated.View>
+    <View pointerEvents="none" style={{ position: 'absolute', left, top }}>
+      {[2.4, 1.6].map((ring, i) => (
+        <View
+          key={ring}
+          style={{
+            position: 'absolute',
+            left: -(size * (ring - 1)) / 2,
+            top: -(size * (ring - 1)) / 2,
+            width: size * ring,
+            height: size * ring,
+            borderRadius: size * ring,
+            backgroundColor: colour,
+            opacity: dark ? 0.07 - i * 0.02 : 0.13 - i * 0.04,
+          }}
+        />
+      ))}
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: colour,
+          opacity: dark ? 0.92 : 0.85,
+        }}
+      />
+    </View>
   );
 }
 
@@ -763,21 +889,11 @@ export function HoodScene({
               transform: [{ translateX: parallax(PARALLAX_SKY) }],
             }}
           >
+            {dark && <StarField width={worldW} horizonY={horizonY} seed={seed} />}
             {/* Parked below the top chrome, not behind it — at 0.16 of the
                 horizon the moon sat under the Hood-name pill. */}
-            <View
-              style={{
-                position: 'absolute',
-                left: viewW * 0.66,
-                top: horizonY * 0.40,
-                width: dark ? 38 : 52,
-                height: dark ? 38 : 52,
-                borderRadius: 26,
-                backgroundColor: dark ? '#EFF1FF' : '#FFF0BE',
-                opacity: dark ? 0.92 : 0.85,
-              }}
-            />
-            <Drifter width={worldW} dark={dark} top={horizonY * 0.34} />
+            <Luminary dark={dark} left={viewW * 0.66} top={horizonY * 0.4} />
+            <Clouds width={worldW} horizonY={horizonY} seed={seed} dark={dark} />
           </Animated.View>
 
           {/* ── Mid layer: skyline. The parallax against the ground while  */}
@@ -883,6 +999,19 @@ export function HoodScene({
                 />
               </View>
 
+              {/* Air between the wall and the actors. Drawn before them so a
+                  cat always reads in front of the weather, and inside the 1x
+                  layer so motes pan with the ground they are settling onto. */}
+              <Motes
+                style={moteStyleFor(envId, dark)}
+                width={worldW}
+                height={height}
+                seed={seed}
+              />
+              {dark && dressing.wallStyle !== 'none' && (
+                <Fireflies width={worldW} height={height * 0.72} seed={seed} />
+              )}
+
               {/* Actors, back to front */}
               {actors.map((actor) => {
                 const p = actor.placement;
@@ -923,6 +1052,13 @@ export function HoodScene({
                     // at random keeps it stable across re-renders — a cat that
                     // flicks between awake and asleep looks broken, not sleepy.
                     asleep={dark && cat.slot % 2 === 1}
+                    seed={seed}
+                    worldWidth={worldW}
+                    sceneHeight={height}
+                    // Someone else's Hood is a photograph, not a place you are
+                    // in: its cats breathe but do not wander off where the
+                    // viewer has no say in it.
+                    alive={!readOnly}
                     onPress={() => handlePressCat(cat)}
                   />
                 );

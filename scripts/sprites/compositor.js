@@ -191,14 +191,23 @@ function regionsFromBuf(regionBuf) {
 }
 
 /**
- * Applies a pattern with direction-aware region queries.
+ * Applies a pattern with direction-aware region queries AND a direction-aware
+ * body frame.
  *
- * Temporarily swaps rig.REGIONS so patterns.js uses the compositor's region
- * buffer instead of the sit-front pose regions. Restored after the call.
+ * Two swaps, for two different questions. REGIONS answers "what part of the cat
+ * is this pixel" — it comes from the composited region buffer. POSE answers
+ * "where is the cat's spine, face and chest" — it comes from poses.js. The
+ * painters need both, and getting only the first is what left the profile
+ * frames with front-view markings: correctly identified ears and tail, stripes
+ * running the wrong way across the ribs.
+ *
+ * The pose is looked up for the SOURCE direction and then mirrored if the frame
+ * was, because compose() flips the buffer before this runs.
  */
-function applyPatternDir(buf, breed, regionBuf) {
+function applyPatternDir(buf, breed, regionBuf, source, mirror) {
   const rig = require('./rig');
-  const { applyPattern } = require('./patterns');
+  const { applyPattern, setPose } = require('./patterns');
+  const { poseFor } = require('./poses');
 
   // Save original region functions
   const saved = {};
@@ -212,6 +221,8 @@ function applyPatternDir(buf, breed, regionBuf) {
     rig.REGIONS[key] = dirRegions[key];
   }
 
+  const savedPose = setPose(poseFor(source, mirror));
+
   let result;
   try {
     result = applyPattern(buf, breed);
@@ -220,6 +231,7 @@ function applyPatternDir(buf, breed, regionBuf) {
     for (const key of Object.keys(saved)) {
       rig.REGIONS[key] = saved[key];
     }
+    setPose(savedPose);
   }
 
   return result;
@@ -241,12 +253,13 @@ function applyPatternDir(buf, breed, regionBuf) {
  */
 function renderFrame(dir, animName, frameIdx, atlas, breed) {
   const { buf, regionBuf, whiskers, shadow } = compose(dir, animName, frameIdx, atlas);
+  const { source, mirror } = RESOLVE[dir];
 
   // Shading pipeline
   shadeComposite(buf, regionBuf);
 
-  // Pattern painting with direction-aware regions
-  const patterned = applyPatternDir(buf, breed, regionBuf);
+  // Pattern painting with direction-aware regions and body frame
+  const patterned = applyPatternDir(buf, breed, regionBuf, source, mirror);
 
   return { buf: patterned, whiskers, shadow };
 }

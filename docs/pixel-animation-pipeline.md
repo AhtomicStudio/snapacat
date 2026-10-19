@@ -1,6 +1,33 @@
 # Getting SnapaCat to AAA-Grade Pixel Animation
 
-**Status:** planning brief · **Written:** 2026-08-18 · **Owner:** twotales89
+**Status:** planning brief, partly executed · **Written:** 2026-08-18 ·
+**Last worked:** 2026-10-16 · **Owner:** twotales89
+
+> **What has since landed.** Items 1–6 of §8 — the free ones, which the plan
+> correctly predicted account for most of the perceived gain. The importer and
+> the fonts came first; this pass did the animation work and the art fixes the
+> directional sheets needed before anything would have been worth rendering.
+>
+> - **Blink, groom, yawn, look and tail-flick** (§6.1–6.2), on a new one-row
+>   front-facing action sheet, with a weighted scheduler that staggers six cats
+>   against each other. The plan's `stretch` became a **yawn**: a front-facing
+>   cat has its forelegs tucked under the torso, so a stretch has nothing to
+>   extend, while a gape reads instantly at 32px.
+> - **Zone drift** (§6.4) — cats now walk between spots inside a small ellipse
+>   around the item they came for, facing their direction of travel. The eight
+>   directions of walk frames the plan noted "no screen renders" are now
+>   rendered.
+> - **Direction-aware markings** — not in the plan, and the blocker under it.
+>   Every pattern painter was hard-coded to the front-facing sit pose, so the
+>   profile frames were being painted with front-view geometry.
+> - **Silhouette fixes** — the raised tails made E and NE read as ducks, and the
+>   torso ran to the ground line so there was no daylight under the cat. Both
+>   found by the silhouette test this document's appendix argues for.
+> - **`verify.js` extended** to cover the new animations (§6.6), plus a new
+>   `motion.js` that measures whether an animation moves at all.
+>
+> **Not done:** transitions (§6.3) and squash-and-stretch on settling (§6.5).
+> Both are real and both are cheap; neither blocks anything shipped here.
 
 A working document for raising SnapaCat's sprite work from "good procedural placeholder"
 to something that reads as a professionally animated game — using AI where AI is
@@ -311,17 +338,17 @@ Do not call any of this done until:
 
 ## 8. Ordered action plan
 
-| # | Action | Cost | Blocks |
-|---|---|---|---|
-| 1 | `npm i -D sharp`, build `scripts/sprites/import.js` | free | everything in Lane B |
-| 2 | Link Quicksand + Nunito (Google Fonts, OFL) | free | UI polish |
-| 3 | Amend the CLAUDE.md invariant (§0) | free | future agent confusion |
-| 4 | Pick a Lospec palette; conform `slots.js` to it | free | visual cohesion |
-| 5 | Blink + 3 flavour idles + transitions (§6.1–6.3) | free | the "alive" feeling |
-| 6 | Zone drift (§6.4) | free | the walk cycle paying off |
-| 7 | Buy Aseprite; wire its CLI into `npm run sprites` | ~$20 | hand authoring |
-| 8 | PixelLab MCP for skeleton animation | credits | volume + new species |
-| 9 | Retro Diffusion Lite for local true-pixel generation | $20 | offline iteration |
+| # | Action | Cost | Blocks | Status |
+|---|---|---|---|---|
+| 1 | `npm i -D sharp`, build `scripts/sprites/import.js` | free | everything in Lane B | ✅ done |
+| 2 | Link Quicksand + Nunito (Google Fonts, OFL) | free | UI polish | ✅ Quicksand linked |
+| 3 | Amend the CLAUDE.md invariant (§0) | free | future agent confusion | ⬜ owner's call |
+| 4 | Pick a Lospec palette; conform `slots.js` to it | free | visual cohesion | ⬜ |
+| 5 | Blink + 3 flavour idles + transitions (§6.1–6.3) | free | the "alive" feeling | ✅ idles; ⬜ transitions |
+| 6 | Zone drift (§6.4) | free | the walk cycle paying off | ✅ done |
+| 7 | Buy Aseprite; wire its CLI into `npm run sprites` | ~$20 | hand authoring | ⬜ |
+| 8 | PixelLab MCP for skeleton animation | credits | volume + new species | ⬜ |
+| 9 | Retro Diffusion Lite for local true-pixel generation | $20 | offline iteration | ⬜ |
 
 **Items 1–6 are free and account for most of the perceived quality gain.** Do
 those before spending anything.

@@ -124,10 +124,20 @@ function checkFrame(label, { buf, regionBuf, partBuf }, { allowHidden = [], minV
     }
   }
 
-  // Row 31 and the frame's outer ring belong to the outline pass and the ground
-  // shadow. Art sitting there leaves applyOutline nowhere to draw a keyline, so
-  // the sprite renders flush against the border with a flat cut. This has now
-  // happened twice — a planted walk foot on y31, then the whole sleep body.
+  /**
+   * Row 31 and the frame's outer ring belong to the outline pass and the ground
+   * shadow. Art sitting there leaves applyOutline nowhere to draw a keyline, so
+   * the sprite renders flush against the border with a flat cut. This has now
+   * happened twice — a planted walk foot on y31, then the whole sleep body.
+   *
+   * This belongs on the COMPOSED buffer and must stay here. Asking it of the
+   * finished buffer instead looks stricter and is simply wrong: the outline
+   * pass dilates art outward by a pixel, so a cat whose paws rest correctly on
+   * row 30 has its keyline on row 31 by design. Moved there, the check fired on
+   * 85 frames, every one of them correct art — including all three idle poses
+   * of every facing. A guard that fails on the intended output trains people to
+   * ignore it.
+   */
   for (let x = 0; x < FRAME_SIZE; x++) {
     if (buf[idx(x, 0)] !== SLOT.EMPTY) { problems.push(`${label}: art on row 0 at x${x}`); break; }
   }
@@ -186,8 +196,43 @@ function holeCount(buf) {
  * participates in.
  */
 function checkFinished(label, buf) {
+  const problems = [];
+
   const holes = holeCount(buf);
-  return holes ? [`${label}: ${holes} enclosed hole pixel(s) survive outlining`] : [];
+  if (holes) problems.push(`${label}: ${holes} enclosed hole pixel(s) survive outlining`);
+
+  /**
+   * COLUMNS only. The rows are a different problem and are checked elsewhere.
+   *
+   * Row 31 is a shared ground line: a cat's paws rest on row 30 and the outline
+   * pass puts their keyline on row 31, flush with the bottom of the cell, by
+   * design. Checking the full ring here fires on every correct frame in the
+   * sheet, which is why the row check stays on the composed buffer where "art
+   * at row 31" still means "no room for a keyline".
+   *
+   * Columns 0 and 31 carry no such meaning. Frames are packed side by side in
+   * one texture, so a sprite touching column 31 sits against its neighbour's
+   * column 0 with nothing between them. It is a latent hazard rather than a
+   * live bug — frames are addressed at exact multiples of the frame size and
+   * snapSize keeps one source pixel on a whole number of device pixels — but
+   * the margin is zero, these are the sheets under active edit, and
+   * assertFrameMargins never sees them. The guard costs six lines and fires on
+   * nothing that is meant to be there.
+   */
+  for (let y = 0; y < FRAME_SIZE; y++) {
+    if (buf[idx(0, y)] !== SLOT.EMPTY) {
+      problems.push(`${label}: touches column 0 at y${y} — no margin to its neighbour in the sheet`);
+      break;
+    }
+  }
+  for (let y = 0; y < FRAME_SIZE; y++) {
+    if (buf[idx(FRAME_SIZE - 1, y)] !== SLOT.EMPTY) {
+      problems.push(`${label}: touches column 31 at y${y} — no margin to its neighbour in the sheet`);
+      break;
+    }
+  }
+
+  return problems;
 }
 
 module.exports = {

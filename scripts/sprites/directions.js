@@ -169,7 +169,13 @@ const SHADOWS = {
  */
 const WHISKER_OFFSETS = {
   S:  [[-7, -2], [-8, -2], [8, -2], [9, -2]],
-  SE: [[7, -2], [8, -3]],
+  // Pulled in two columns so they start ON the muzzle's keyline rather than
+  // beside it. At [[7,-2],[8,-3]] these resolved to (24,16) and (25,15)
+  // against a face whose near edge is x22 — a pair of specks floating two
+  // columns clear of the head, the same defect E's whiskers were deleted for.
+  // They survived the connectivity check because they touch each other
+  // diagonally, and 8-connectivity counts a diagonal touch as connected.
+  SE: [[6, -2], [7, -2]],
   // E has none: the offsets resolved to (28,14) and (29,13), which extended the
   // muzzle by two pixels and lengthened the very bill the head rebuild removes.
   // rig.js puts it plainly — a whisker has to grow out of the face, not hover

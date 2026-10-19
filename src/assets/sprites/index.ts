@@ -84,16 +84,17 @@ export const DIRECTIONS = ['S', 'SE', 'E', 'NE', 'N', 'NW', 'W', 'SW'] as const;
 export type SpriteDirection = (typeof DIRECTIONS)[number];
 
 /** Number of frame columns per direction row in directional sheets. */
-export const DIR_FRAME_COUNT = 10;
+export const DIR_FRAME_COUNT = 7;
 
 /**
  * Directional animations. Frame indices reference columns in the direction
  * row, matching the sheet layout.
  */
-export const DIR_ANIMATIONS: Record<'idle' | 'walk' | 'sleep', SpriteAnimation> = {
+export type DirAnimation = 'idle' | 'walk';
+
+export const DIR_ANIMATIONS: Record<DirAnimation, SpriteAnimation> = {
   idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
   walk: { frames: [3, 4, 5, 6], durations: [180, 140, 180, 140] },
-  sleep: { frames: [7, 8, 9, 8], durations: [1400, 220, 700, 220] },
 };
 
 export const SPRITE_SHEETS_DIR: Record<string, ImageSourcePropType> = {
@@ -129,6 +130,77 @@ export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
       console.warn(`[sprites] Unknown sprite id "${spriteId}" for dir sheet — falling back to brown_mackerel_tabby.`);
     }
     return SPRITE_SHEETS_DIR['brown_mackerel_tabby']!;
+  }
+  return sheet;
+}
+
+// ---------------------------------------------------------------------------
+// Action sheet — front-facing flavour idles
+// ---------------------------------------------------------------------------
+
+/**
+ * One row, S-facing only, so these cost an eighth of what the same animations
+ * would on the directional sheet. A settled cat in the Hood faces the player,
+ * which is the only direction these need.
+ *
+ * `idle` is on this sheet as well as the directional one, so a cat that never
+ * moves never decodes the big texture.
+ */
+export const ACT_FRAME_COUNT = 26;
+
+export type ActAnimation = 'idle' | 'blink' | 'groom' | 'yawn' | 'look' | 'tailflick' | 'sleep';
+
+export const ACT_ANIMATIONS: Record<ActAnimation, SpriteAnimation> = {
+  idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
+  blink: { frames: [3, 4, 5, 4, 6, 7, 6, 4, 5, 4, 3, 4], durations: [560, 130, 420, 130, 60, 110, 90, 130, 420, 130, 460, 130] },
+  groom: { frames: [8, 9, 10, 11, 10, 11, 10, 9, 8], durations: [700, 90, 170, 130, 150, 130, 210, 110, 820] },
+  yawn: { frames: [12, 13, 14, 15, 12], durations: [900, 300, 540, 120, 900] },
+  look: { frames: [16, 17, 18, 17, 16, 19, 16], durations: [680, 260, 180, 200, 320, 440, 700] },
+  tailflick: { frames: [20, 21, 20, 22, 20], durations: [760, 320, 240, 320, 820] },
+  sleep: { frames: [23, 24, 25, 24], durations: [1400, 220, 700, 220] },
+};
+
+/** Every flavour idle, i.e. everything a settled cat can do except plain idle. */
+export const FLAVOUR_IDLES: ActAnimation[] = [
+  'blink',
+  'groom',
+  'yawn',
+  'look',
+  'tailflick',
+  'sleep',
+];
+
+export const SPRITE_SHEETS_ACT: Record<string, ImageSourcePropType> = {
+  brown_mackerel_tabby: require('./brown_mackerel_tabby_act.png'),
+  brown_classic_tabby: require('./brown_classic_tabby_act.png'),
+  grey_mackerel_tabby: require('./grey_mackerel_tabby_act.png'),
+  orange_mackerel_tabby: require('./orange_mackerel_tabby_act.png'),
+  brown_tabby_white: require('./brown_tabby_white_act.png'),
+  grey_tabby_white: require('./grey_tabby_white_act.png'),
+  orange_tabby_white: require('./orange_tabby_white_act.png'),
+  solid_black: require('./solid_black_act.png'),
+  solid_grey: require('./solid_grey_act.png'),
+  solid_white: require('./solid_white_act.png'),
+  black_tuxedo: require('./black_tuxedo_act.png'),
+  grey_tuxedo: require('./grey_tuxedo_act.png'),
+  cow_cat: require('./cow_cat_act.png'),
+  tortoiseshell: require('./tortoiseshell_act.png'),
+  calico: require('./calico_act.png'),
+  dilute_calico: require('./dilute_calico_act.png'),
+  torbie: require('./torbie_act.png'),
+  seal_point: require('./seal_point_act.png'),
+  lynx_point: require('./lynx_point_act.png'),
+  black_smoke: require('./black_smoke_act.png'),
+};
+
+/** Returns the action sheet for a sprite id, with fallback. */
+export function getActSpriteSheet(spriteId: string): ImageSourcePropType {
+  const sheet = SPRITE_SHEETS_ACT[spriteId];
+  if (!sheet) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(`[sprites] Unknown sprite id "${spriteId}" for act sheet — falling back to brown_mackerel_tabby.`);
+    }
+    return SPRITE_SHEETS_ACT['brown_mackerel_tabby']!;
   }
   return sheet;
 }

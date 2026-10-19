@@ -41,43 +41,11 @@ const DISPLAY_SCALE = 4;
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts breed records from the TypeScript source. Field order in
- * SpriteDefinition is stable, so a single ordered regex is enough — and the
- * expected-count assertion below turns any future refactor into a loud build
- * failure rather than silently missing breeds.
+ * Breed records live in breeds.js so inspection tooling can read them without
+ * triggering a full 40-sheet rebuild. Re-exported here under the name the rest
+ * of this file already uses.
  */
-function loadBreeds() {
-  const src = fs.readFileSync(LIBRARY_TS, 'utf8');
-  const re =
-    /id:\s*'([^']+)'[\s\S]*?label:\s*'((?:[^'\\]|\\.)*)'[\s\S]*?palette:\s*\[([^\]]+)\][\s\S]*?pattern:\s*'([^']+)'[\s\S]*?rarity:\s*'([^']+)'[\s\S]*?tier:\s*(\d)/g;
-
-  const breeds = [];
-  let m;
-  while ((m = re.exec(src)) !== null) {
-    const palette = m[3]
-      .split(',')
-      .map((s) => s.trim().replace(/['"]/g, ''))
-      .filter(Boolean);
-
-    breeds.push({
-      id: m[1],
-      label: m[2].replace(/\\'/g, "'"),
-      palette,
-      pattern: m[4],
-      rarity: m[5],
-      tier: Number(m[6]),
-      hasWhite: palette.some(isNearWhite),
-      // The palette is ordered by area coverage, so a white first entry means
-      // the cat is mostly white and its markings should invert.
-      whiteDominant: isNearWhite(palette[0]),
-    });
-  }
-
-  if (breeds.length === 0) {
-    throw new Error(`No breeds parsed from ${LIBRARY_TS} — has SpriteDefinition changed shape?`);
-  }
-  return breeds;
-}
+const { loadBreeds } = require('./breeds');
 
 // ---------------------------------------------------------------------------
 // Composition
@@ -367,8 +335,10 @@ function writeAnimStrip(breed, frames) {
 // ---------------------------------------------------------------------------
 
 const { renderFrame, buildPartAtlas } = require('./compositor');
-const { ALL: ALL_DIRS } = require('./directions');
-const { DIR_ANIMATIONS, ANIM_ORDER, sheetLayout } = require('./animations');
+const { ALL: ALL_DIRS, RESOLVE } = require('./directions');
+/** Directions derived by mirroring, for the preview harness to label. */
+const RESOLVE_MIRRORED = new Set(ALL_DIRS.filter((d) => RESOLVE[d].mirror));
+const { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, sheetLayout } = require('./animations');
 
 /**
  * Checks the composed geometry once, before any sheet is written.
@@ -392,26 +362,52 @@ function verifyDirFrames(atlas) {
   const { checkFrame, checkFinished } = require('./verify');
   const problems = [];
 
-  for (const dir of ALL_DIRS) {
-    for (const animName of ANIM_ORDER) {
-      const anim = DIR_ANIMATIONS[animName];
-      for (let f = 0; f < anim.frames.length; f++) {
-        const label = `${dir}/${animName}[${f}]`;
-        const composed = compose(dir, animName, f, atlas);
+  /**
+   * What ships, and only what ships.
+   *
+   * The directional sheet carries ANIM_ORDER in all eight directions; the
+   * action sheet carries ACT_ORDER front-facing only. Checking the flavour
+   * idles in all eight directions as well sounds stricter but is not useful:
+   * it reported two enclosed holes in N/look, a frame that is never rendered
+   * into any sheet, because the rear head has no face variants and a 2px glance
+   * opens a gap against a neck that was narrowed for the rear silhouette.
+   * Failing the build on a frame nothing can display trains people to ignore
+   * the verifier, which is the one outcome worth avoiding here.
+   *
+   * If a flavour idle is ever wanted in another direction, add it to the pair
+   * list and the geometry gets checked the moment it can be seen.
+   */
+  const seen = new Set();
+  const shipped = [
+    ...ALL_DIRS.flatMap((dir) => ANIM_ORDER.map((animName) => ({ dir, animName }))),
+    ...ACT_ORDER.map((animName) => ({ dir: 'S', animName })),
+  ].filter(({ dir, animName }) => {
+    // idle is on both sheets, so S/idle appears twice. Reporting a problem with
+    // it twice would make one defect look like two.
+    const key = `${dir}/${animName}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 
-        // Geometry questions belong on the composed buffer.
-        problems.push(...checkFrame(label, composed, {
-          allowHidden: ALLOW_HIDDEN[dir] ?? [],
-        }));
+  for (const { dir, animName } of shipped) {
+    const anim = DIR_ANIMATIONS[animName];
+    for (let f = 0; f < anim.frames.length; f++) {
+      const label = `${dir}/${animName}[${f}]`;
+      const composed = compose(dir, animName, f, atlas);
 
-        // Anything the outline pass participates in has to be asked of the
-        // buffer that actually ships — pre-outline hole counts are noise,
-        // because applyOutline legitimately closes most of them.
-        const finished = composed.buf.slice();
-        shadeComposite(finished, composed.regionBuf);
-        finishFrame(finished, composed.whiskers);
-        problems.push(...checkFinished(label, finished));
-      }
+      // Geometry questions belong on the composed buffer.
+      problems.push(...checkFrame(label, composed, {
+        allowHidden: ALLOW_HIDDEN[dir] ?? [],
+      }));
+
+      // Anything the outline pass participates in has to be asked of the
+      // buffer that actually ships — pre-outline hole counts are noise,
+      // because applyOutline legitimately closes most of them.
+      const finished = composed.buf.slice();
+      shadeComposite(finished, composed.regionBuf);
+      finishFrame(finished, composed.whiskers);
+      problems.push(...checkFinished(label, finished));
     }
   }
 
@@ -424,23 +420,25 @@ function verifyDirFrames(atlas) {
 }
 
 /**
- * Renders all directional frames for one breed and packs them into a sheet.
- * Layout: rows = directions (S,SE,E,NE,N,NW,W,SW), cols = animation frames
- * packed sequentially (idle frames, walk frames, sleep frames).
+ * Renders frames for one breed and packs them into a sheet.
+ *
+ * Rows are directions, columns are animation frames packed sequentially. Both
+ * shipped sheets go through here — the directional sheet passes all eight
+ * directions and the locomotion animations, the action sheet passes S alone and
+ * the flavour idles. Keeping one packer means the shadow compositing, the
+ * palette resolution and the frame blit cannot drift apart between them.
  */
-function buildDirSheet(breed, atlas) {
-  const { layout, totalCols } = sheetLayout();
+function packSheet(breed, atlas, dirs, order) {
+  const { layout, totalCols } = sheetLayout(order);
   const width = FRAME_SIZE * totalCols;
-  const height = FRAME_SIZE * ALL_DIRS.length;
+  const height = FRAME_SIZE * dirs.length;
   const rgba = Buffer.alloc(width * height * 4);
   const palette = resolvePalette(breed);
-  const allShadows = [];
 
-  for (let row = 0; row < ALL_DIRS.length; row++) {
-    const dir = ALL_DIRS[row];
-    const rowShadows = [];
+  for (let row = 0; row < dirs.length; row++) {
+    const dir = dirs[row];
 
-    for (const animName of ANIM_ORDER) {
+    for (const animName of order) {
       const anim = DIR_ANIMATIONS[animName];
       const { startCol } = layout[animName];
 
@@ -487,6 +485,16 @@ function buildDirSheet(breed, atlas) {
   }
 
   return { rgba, width, height, totalCols };
+}
+
+/** The 8-direction locomotion sheet. */
+function buildDirSheet(breed, atlas) {
+  return packSheet(breed, atlas, ALL_DIRS, ANIM_ORDER);
+}
+
+/** The single-row, front-facing flavour-idle sheet. */
+function buildActSheet(breed, atlas) {
+  return packSheet(breed, atlas, ['S'], ACT_ORDER);
 }
 
 /**
@@ -547,9 +555,23 @@ function writeDirContactSheet(breed, atlas) {
 /**
  * Extended manifest with directional sheet data.
  */
-function writeDirManifest(breeds, frameCount, totalDirCols) {
+function writeDirManifest(breeds, frameCount, totalDirCols, totalActCols) {
   const entries = breeds.map((b) => `  ${b.id}: require('./${b.id}.png'),`).join('\n');
   const dirEntries = breeds.map((b) => `  ${b.id}: require('./${b.id}_dir.png'),`).join('\n');
+  const actEntries = breeds.map((b) => `  ${b.id}: require('./${b.id}_act.png'),`).join('\n');
+
+  const actLayout = sheetLayout(ACT_ORDER).layout;
+  const actAnims = ACT_ORDER.map((name) => {
+    const anim = DIR_ANIMATIONS[name];
+    const l = actLayout[name];
+    const frameIndices = anim.sequence.map((s) => l.startCol + s);
+    return `  ${name}: { frames: [${frameIndices.join(', ')}], durations: [${anim.durations.join(', ')}] },`;
+  }).join('\n');
+  const actNames = ACT_ORDER.map((n) => `'${n}'`).join(' | ');
+  // Derived, not written out by hand. Dropping `sleep` from the directional
+  // sheet left a hand-maintained union claiming it was still there, and the
+  // generated manifest stopped compiling.
+  const dirNamesUnion = ANIM_ORDER.map((n) => `'${n}'`).join(' | ');
 
   const anims = Object.entries(ANIMATIONS)
     .map(
@@ -642,7 +664,9 @@ export const DIR_FRAME_COUNT = ${totalDirCols};
  * Directional animations. Frame indices reference columns in the direction
  * row, matching the sheet layout.
  */
-export const DIR_ANIMATIONS: Record<'idle' | 'walk' | 'sleep', SpriteAnimation> = {
+export type DirAnimation = ${dirNamesUnion};
+
+export const DIR_ANIMATIONS: Record<DirAnimation, SpriteAnimation> = {
 ${dirAnims}
 };
 
@@ -663,9 +687,94 @@ export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
   }
   return sheet;
 }
+
+// ---------------------------------------------------------------------------
+// Action sheet — front-facing flavour idles
+// ---------------------------------------------------------------------------
+
+/**
+ * One row, S-facing only, so these cost an eighth of what the same animations
+ * would on the directional sheet. A settled cat in the Hood faces the player,
+ * which is the only direction these need.
+ *
+ * \`idle\` is on this sheet as well as the directional one, so a cat that never
+ * moves never decodes the big texture.
+ */
+export const ACT_FRAME_COUNT = ${totalActCols};
+
+export type ActAnimation = ${actNames};
+
+export const ACT_ANIMATIONS: Record<ActAnimation, SpriteAnimation> = {
+${actAnims}
+};
+
+/** Every flavour idle, i.e. everything a settled cat can do except plain idle. */
+export const FLAVOUR_IDLES: ActAnimation[] = [
+${ACT_ORDER.filter((n) => n !== 'idle').map((n) => `  '${n}',`).join('\n')}
+];
+
+export const SPRITE_SHEETS_ACT: Record<string, ImageSourcePropType> = {
+${actEntries}
+};
+
+/** Returns the action sheet for a sprite id, with fallback. */
+export function getActSpriteSheet(spriteId: string): ImageSourcePropType {
+  const sheet = SPRITE_SHEETS_ACT[spriteId];
+  if (!sheet) {
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn(\`[sprites] Unknown sprite id "\${spriteId}" for act sheet — falling back to ${breeds[0].id}.\`);
+    }
+    return SPRITE_SHEETS_ACT['${breeds[0].id}']!;
+  }
+  return sheet;
+}
 `;
 
   fs.writeFileSync(path.join(OUT_DIR, 'index.ts'), contents);
+}
+
+/**
+ * Data for the standalone preview harness.
+ *
+ * preview.html used to carry its own copies of the direction list, the
+ * animation tables, the breed names and the sheet column count, under a comment
+ * asking whoever changed those to remember to update it here too. Nobody was
+ * ever going to, and it was already stale. Emitting it from the build means the
+ * harness cannot describe a sheet that does not exist.
+ *
+ * Written as a plain script rather than a module so the page keeps working from
+ * file:// — ES module imports are blocked by CORS there, and a review harness
+ * that needs a web server is a review harness nobody opens.
+ */
+function writePreviewData(breeds, totalDirCols, totalActCols) {
+  const table = (order) =>
+    order
+      .map((name) => {
+        const anim = DIR_ANIMATIONS[name];
+        const l = sheetLayout(order).layout[name];
+        const frames = anim.sequence.map((s) => l.startCol + s);
+        return `    ${name}: { frames: [${frames.join(', ')}], durations: [${anim.durations.join(', ')}] },`;
+      })
+      .join('\n');
+
+  const contents = `/* AUTO-GENERATED by scripts/sprites/build.js — do not edit by hand. */
+window.SNAPACAT_PREVIEW = {
+  DIRECTIONS: [${ALL_DIRS.map((d) => `'${d}'`).join(', ')}],
+  MIRRORED: [${ALL_DIRS.filter((d) => RESOLVE_MIRRORED.has(d)).map((d) => `'${d}'`).join(', ')}],
+  BREEDS: [${breeds.map((b) => `'${b.id}'`).join(', ')}],
+  SRC_FRAME: ${FRAME_SIZE},
+  SHEET_FRAME: ${FRAME_SIZE * DISPLAY_SCALE},
+  DIR_COLS: ${totalDirCols},
+  ACT_COLS: ${totalActCols},
+  DIR_ANIMATIONS: {
+${table(ANIM_ORDER)}
+  },
+  ACT_ANIMATIONS: {
+${table(ACT_ORDER)}
+  },
+};
+`;
+  fs.writeFileSync(path.join(__dirname, 'preview-data.js'), contents);
 }
 
 // ---------------------------------------------------------------------------
@@ -691,6 +800,7 @@ function main() {
   const atlas = buildPartAtlas();
   verifyDirFrames(atlas);
   let totalDirCols = 0;
+  let totalActCols = 0;
 
   for (const breed of breeds) {
     const { rgba, width, height, totalCols } = buildDirSheet(breed, atlas);
@@ -698,9 +808,14 @@ function main() {
     // No margin assertion for directional sheets yet — parts are smaller
     // and margins are generous, but we validate empirically.
     writeSheet(path.join(OUT_DIR, `${breed.id}_dir.png`), rgba, width, height, DISPLAY_SCALE);
+
+    const act = buildActSheet(breed, atlas);
+    totalActCols = act.totalCols;
+    writeSheet(path.join(OUT_DIR, `${breed.id}_act.png`), act.rgba, act.width, act.height, DISPLAY_SCALE);
   }
 
-  writeDirManifest(breeds, frames.length, totalDirCols);
+  writeDirManifest(breeds, frames.length, totalDirCols, totalActCols);
+  writePreviewData(breeds, totalDirCols, totalActCols);
   writeTemplate(frames);
   writeContactSheet(breeds, frames);
   writeAnimStrip(breeds[0], frames);
@@ -712,6 +827,9 @@ function main() {
   console.log(`✓ ${breeds.length} sprite sheets  (${frames.length} frames, ${sheetPx})`);
   console.log(`  → src/assets/sprites/`);
   console.log(`✓ ${breeds.length} directional sheets  (${totalCols}×${ALL_DIRS.length} frames, ${dirPx})`);
+  const actCols = sheetLayout(ACT_ORDER).totalCols;
+  const actPx = `${FRAME_SIZE * actCols * DISPLAY_SCALE}x${FRAME_SIZE * DISPLAY_SCALE}`;
+  console.log(`✓ ${breeds.length} action sheets       (${actCols}×1 frames, ${actPx})`);
   console.log(`  → src/assets/sprites/`);
   console.log(`✓ template, palette, contact sheet, anim strip, dir contact`);
   console.log(`  → src/assets/sprites/template/`);

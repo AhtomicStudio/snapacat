@@ -1,5 +1,54 @@
 import { buildFrameInterpolation } from '../spriteFrames';
-import { ANIMATIONS } from '../../assets/sprites';
+import {
+  ACT_ANIMATIONS,
+  ACT_FRAME_COUNT,
+  ANIMATIONS,
+  DIR_ANIMATIONS,
+  DIR_FRAME_COUNT,
+  FRAME_COUNT,
+  type SpriteAnimation,
+} from '../../assets/sprites';
+
+/**
+ * Every sheet the app renders from, with the number of columns it actually
+ * has. All three go through the same interpolation, so all three get the same
+ * assertions — the action sheet in particular is generated from a different
+ * ordering than the directional one, and an off-by-one in that layout would
+ * show up as a cat playing someone else's animation.
+ */
+const SHEETS: Array<{
+  sheet: string;
+  anims: Record<string, SpriteAnimation>;
+  columns: number;
+}> = [
+  { sheet: 'whole-frame', anims: ANIMATIONS, columns: FRAME_COUNT },
+  { sheet: 'directional', anims: DIR_ANIMATIONS, columns: DIR_FRAME_COUNT },
+  { sheet: 'action', anims: ACT_ANIMATIONS, columns: ACT_FRAME_COUNT },
+];
+
+describe('sheet manifests', () => {
+  for (const { sheet, anims, columns } of SHEETS) {
+    describe(sheet, () => {
+      it('never references a column the sheet does not have', () => {
+        // An out-of-range index does not throw. It translates the sheet past
+        // its own edge and renders empty, so the cat simply vanishes for that
+        // frame — which looks like a flicker, not like a bug with a cause.
+        const outOfRange = Object.entries(anims).flatMap(([name, anim]) =>
+          anim.frames
+            .filter((frame) => frame < 0 || frame >= columns)
+            .map((frame) => `${name} frame ${frame} (sheet has ${columns} columns)`),
+        );
+        expect(outOfRange).toEqual([]);
+      });
+
+      it('visits more than one column, so something actually animates', () => {
+        for (const anim of Object.values(anims)) {
+          expect(new Set(anim.frames).size).toBeGreaterThan(1);
+        }
+      });
+    });
+  }
+});
 
 /**
  * The interpolation table is what maps elapsed time to a frame offset, and it
@@ -13,7 +62,15 @@ import { ANIMATIONS } from '../../assets/sprites';
 describe('buildFrameInterpolation', () => {
   const SIZE = 44;
 
-  for (const [name, anim] of Object.entries(ANIMATIONS)) {
+  // Every animation on every sheet, not just the whole-frame ones. The flavour
+  // idles have the most lopsided duration tables in the project — a 60ms blink
+  // beside a 900ms rest — and lopsided timings are exactly what the 60Hz
+  // sampling assertion below exists to police.
+  const everyAnimation = SHEETS.flatMap(({ sheet, anims }) =>
+    Object.entries(anims).map(([name, anim]) => [`${sheet}/${name}`, anim] as const),
+  );
+
+  for (const [name, anim] of everyAnimation) {
     describe(name, () => {
       const { inputRange, outputRange, total } = buildFrameInterpolation(anim, SIZE);
 

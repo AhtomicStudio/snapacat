@@ -130,26 +130,196 @@ const DIR_ANIMATIONS = {
     durations: [1400, 220, 700, 220],
   },
 
-  // ── Stretch: per-rarity animation unlock example ─────────────────────
-  // stretch: {
-  //   rarity: 'legendary',
-  //   frames: [...],
-  //   sequence: [...],
-  //   durations: [...],
-  // },
+  // ─────────────────────────────────────────────────────────────────────
+  // Flavour idles
+  //
+  // A cat looping one four-frame breath forever reads as a texture. A cat that
+  // occasionally blinks, grooms, yawns or flicks an ear reads as alive, and it
+  // is the highest-value thing available here because it needs no new tech —
+  // only more part variants and a scheduler to pick between these.
+  //
+  // Every one of them STARTS AND ENDS AT REST, and that is load-bearing. The
+  // runtime switches between whole animations rather than splicing frames, so
+  // if two neighbouring loops did not share a resting pose the switch would pop
+  // — which is the same class of bug as the sit-to-walk pop the pipeline doc
+  // warns about, arriving through a different door.
+  //
+  // They also carry the breathing through wherever there is room. A cat that
+  // stops breathing to blink is a cat that stops being alive for 240ms.
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Blink. Two lids on the way down, two on the way up.
+   *
+   * Going straight from eyes-open to eyes-shut and back is a one-frame pop that
+   * reads as a glitch rather than a blink; the squint frame either side is what
+   * buys the motion. The timings are deliberately lopsided — a real blink shuts
+   * fast and opens slower.
+   */
+  blink: {
+    frames: [
+      {},
+      { body: { v: 1 } },
+      { body: { v: 2 } },
+      // The lid frames keep the chest where the breath had it. Dropping back to
+      // body v0 for the blink deflated the ribcage at the exact instant the eye
+      // closed — a 12px chest movement wrapped around a 6px eye movement, which
+      // is why the measured "blink" delta was mostly not the blink.
+      { head: { v: 2 }, body: { v: 1 } },   // squint
+      { head: { v: 1 }, body: { v: 1 } },   // shut
+    ],
+    // Ends on frame 1, not frame 0. Returning to rest the instant the eye
+    // reopens put the chest's 13px deflation on exactly the frame the lids
+    // lift — which is the same coupling that used to sit on the way IN, just
+    // moved to the other end. Ending mid-breath lets the two events separate.
+    sequence: [0, 1, 2, 1, 3, 4, 3, 1, 2, 1, 0, 1],
+    durations: [560, 130, 420, 130, 60, 110, 90, 130, 420, 130, 460, 130],
+  },
+
+  /**
+   * Groom. The head dips to the chest, licks twice, and comes back up.
+   *
+   * Deliberately no raised paw. A front-facing cat has its forelegs tucked
+   * under the torso at this size — lifting one to the face would mean authoring
+   * a leg that is three pixels wide and travels eleven rows, and the result
+   * reads as a flipper. Washing the chest needs no new limb art and is just as
+   * legible, which is the better trade at 32px.
+   *
+   * Eyes close on the way DOWN, a frame before the tongue appears. Closing them
+   * on arrival makes the head look like it switched off; closing them early is
+   * the anticipation that makes the dip look intended.
+   */
+  groom: {
+    frames: [
+      {},
+      { head: { v: 1, dy: 1 } },            // shut, starting down
+      { head: { v: 4, dy: 3 }, body: { v: 1 } },  // lick, at the chest
+      { head: { v: 4, dy: 2 } },            // the stroke
+    ],
+    sequence: [0, 1, 2, 3, 2, 3, 2, 1, 0],
+    durations: [700, 90, 170, 130, 150, 130, 210, 110, 820],
+  },
+
+  /**
+   * Yawn. Head tips back, jaw drops, settles.
+   *
+   * The chest takes its peak-breath variant on the gape frame, because a yawn
+   * is an inhale — holding the ribcage still through one makes the whole thing
+   * read as a silent scream. The long hold on the open mouth is the joke.
+   */
+  yawn: {
+    frames: [
+      {},
+      { head: { v: 2, dy: -1 } },                 // squint, tipping back
+      { head: { v: 3, dy: -1 }, body: { v: 2 } }, // gape
+      { head: { v: 2 } },                          // settling
+    ],
+    // A yawn opens slowly and snaps shut. The previous table moved at the same
+    // rate in both directions (0.82 px/ms opening, 0.88 closing), which reads
+    // as a mouth being operated rather than a jaw letting go.
+    sequence: [0, 1, 2, 3, 0],
+    durations: [900, 300, 540, 120, 900],
+  },
+
+  /**
+   * Look around. A glance one way with an ear flick, then the other way.
+   *
+   * dx 2, not 1: at 32px a single pixel of head travel disappears into the
+   * keyline. The neck stub spans six pixels against an eleven-pixel shoulder,
+   * so a 2px shift stays well inside the joint and the head cannot detach.
+   */
+  look: {
+    frames: [
+      {},
+      { head: { dx: 2 }, body: { v: 1 } },
+      { head: { v: 5, dx: 2 }, body: { v: 1 } },  // ear flick, mid-glance
+      // v1, not v2. The idle cycle is 0-1-2-1 precisely so the chest never
+      // changes breath level by more than one step; a v0 frame next to a v2
+      // frame un-widens five rows at once inside a single 320ms beat, which
+      // reads as a catch of breath rather than a breath.
+      { head: { dx: -2 }, body: { v: 1 } },
+    ],
+    sequence: [0, 1, 2, 1, 0, 3, 0],
+    durations: [680, 260, 180, 200, 320, 440, 700],
+  },
+
+  /**
+   * Tail flick. Out, back, out again, settle.
+   *
+   * The bend lives in the part art rather than in a dx — see buildTail_S. A
+   * whole-part translation would slide the root off the hip and open a gap the
+   * outline pass is one pixel short of closing.
+   */
+  tailflick: {
+    frames: [
+      {},
+      { tail: { v: 1 }, body: { v: 1 } },
+      // v1 both sides, for the same reason as `look` — a v0 to v2 step is two
+      // breath levels at once.
+      { tail: { v: 2 }, body: { v: 1 } },
+    ],
+    // Slower than a flick, because a settled cat's tail swishes rather than
+    // twitches. The previous table ran out-in-out at about 3.3Hz, which reads
+    // as agitation; a contented cat is nearer 1Hz with more travel in it.
+    sequence: [0, 1, 0, 2, 0],
+    durations: [760, 320, 240, 320, 820],
+  },
 };
 
-/** Animation names in the order they appear as column groups in the sheet. */
-const ANIM_ORDER = ['idle', 'walk', 'sleep'];
+/**
+ * Animations on the 8-direction sheet: locomotion and the states a cat can be
+ * in while facing any way.
+ *
+ * This list is the expensive one. The directional sheet is 8 rows tall, so each
+ * column added here costs 8 frames per breed across 20 breeds — a 32px frame at
+ * 4x is 128px square, so ten columns is already a 1280x1024 texture, and six of
+ * those resident is most of a mid-range device's bitmap budget. Flavour idles
+ * stay off it for that reason alone.
+ */
+/**
+ * `sleep` is NOT here, and that is worth three columns of explanation.
+ *
+ * It used to be, and nothing ever rendered it: useCatLife routes a dozing cat
+ * to `{ kind: 'settled', animation: 'sleep' }`, which reads the action sheet,
+ * and the only other sleep call site is ApartmentCanvas on the whole-frame
+ * sheet. So three of this sheet's ten columns were decoded on every Hood and
+ * displayed on none — 1.5MB per breed, 9MB at the six-cat cap, on the one
+ * texture this whole two-sheet split exists to keep small.
+ *
+ * It was also the worst place for it. A sleeping cat facing away has no eyes
+ * to close, so N, NE and NW differed from their idle frames by 17-20 pixels of
+ * skull outline moving one row — you could not tell a sleeping cat from an
+ * awake one. Front-facing, on the action sheet, the closed eyes do the work.
+ */
+const ANIM_ORDER = ['idle', 'walk'];
+
+/**
+ * Animations on the single-row action sheet, rendered front-facing only.
+ *
+ * WHY THIS SHEET EXISTS
+ *
+ * Flavour idles play on a cat that has settled somewhere, and a settled cat in
+ * the Hood faces the player — that is already how the scene reads and it is the
+ * friendliest pose for a cosy game. So they need exactly one direction, which
+ * makes them an eighth the cost of anything on the directional sheet: all six
+ * of these together come to roughly 1.5MB per breed where a single extra
+ * directional column is 0.5MB.
+ *
+ * `idle` and `sleep` appear on both sheets on purpose. It means a settled cat
+ * never has to touch the directional sheet, so the two are independently
+ * loadable and a Hood full of dozing cats never decodes the expensive one at
+ * all — which is the common case after dark, when half the Hood is asleep.
+ */
+const ACT_ORDER = ['idle', 'blink', 'groom', 'yawn', 'look', 'tailflick', 'sleep'];
 
 /**
  * Returns the column offset where each animation starts in the sheet row,
  * and the total column count.
  */
-function sheetLayout() {
+function sheetLayout(order = ANIM_ORDER) {
   let col = 0;
   const layout = {};
-  for (const name of ANIM_ORDER) {
+  for (const name of order) {
     const anim = DIR_ANIMATIONS[name];
     layout[name] = { startCol: col, frameCount: anim.frames.length };
     col += anim.frames.length;
@@ -157,4 +327,4 @@ function sheetLayout() {
   return { layout, totalCols: col };
 }
 
-module.exports = { DIR_ANIMATIONS, ANIM_ORDER, sheetLayout };
+module.exports = { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, sheetLayout };

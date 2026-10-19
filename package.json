@@ -12,7 +12,11 @@
     "sprites": "node scripts/sprites/build.js",
     "sprites:props": "node scripts/sprites/props.js",
     "sprites:propsheet": "node scripts/sprites/propsheet.js",
-    "sprites:import": "node scripts/sprites/import.js"
+    "sprites:import": "node scripts/sprites/import.js",
+    "sprites:preview": "node scripts/sprites/serve.js",
+    "sprites:motion": "node scripts/sprites/motion.js",
+    "sprites:inspect": "node scripts/sprites/inspect.js",
+    "sprites:separation": "node scripts/sprites/separation.js"
   },
   "dependencies": {
     "@react-native-firebase/app": "^24.1.1",

@@ -12,14 +12,30 @@
  * 6-sprite cap rise for free.
  */
 import React, { useEffect, useMemo, useRef } from 'react';
-import { Animated, Easing, PixelRatio, View, type ViewStyle } from 'react-native';
 import {
+  Animated,
+  Easing,
+  PixelRatio,
+  View,
+  type ImageSourcePropType,
+  type ViewStyle,
+} from 'react-native';
+import {
+  ACT_ANIMATIONS,
+  ACT_FRAME_COUNT,
   ANIMATIONS,
+  DIRECTIONS,
+  DIR_ANIMATIONS,
+  DIR_FRAME_COUNT,
   FRAME_COUNT,
   FRAME_SIZE,
   SOURCE_FRAME_SIZE,
+  getActSpriteSheet,
+  getDirSpriteSheet,
   getSpriteSheet,
+  type ActAnimation,
   type SpriteAnimation,
+  type SpriteDirection,
 } from '../assets/sprites';
 import { buildFrameInterpolation } from './spriteFrames';
 
@@ -63,9 +79,23 @@ export function snapSize(desiredDp: number): number {
   return (blocks * SOURCE_FRAME_SIZE) / density;
 }
 
-/** Drives frame selection from a single native-driven value. */
-function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean, phase: number) {
+/**
+ * Drives frame selection from a single native-driven value.
+ *
+ * `stagger` offsets the START TIME by a per-sprite amount, so sprites that free
+ * run forever do not breathe in lockstep. It is deliberately NOT applied to
+ * sprites whose animation is chosen by a scheduler — see below.
+ */
+function useFrameTranslate(
+  anim: SpriteAnimation,
+  size: number,
+  paused: boolean,
+  phase: number,
+  stagger: boolean,
+) {
   const t = useRef(new Animated.Value(0)).current;
+  /** Whether this sprite has already paid its one-time stagger. */
+  const staggered = useRef(false);
 
   const { inputRange, outputRange, total } = useMemo(
     () => buildFrameInterpolation(anim, size),
@@ -85,9 +115,24 @@ function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean,
       }),
     );
 
-    // Offsetting the start time rather than the start value keeps every cycle
-    // complete; seeding the value instead would clip the frames before it.
-    //
+    /**
+     * The stagger is a MOUNT-time offset, and it must fire at most once.
+     *
+     * `total` is in this effect's deps because the interpolation depends on it,
+     * so the effect re-runs whenever the animation changes. When nothing ever
+     * changed a cat's animation that was harmless. Now that a scheduler swaps
+     * flavour idles every couple of seconds, re-applying the delay held the
+     * sprite on frame 0 for up to 519ms EVERY TIME — a cat sliding across the
+     * ground with its legs frozen mid-stride, and a groom cut off before the
+     * head came back up, which quietly broke the "every idle starts and ends
+     * at rest" invariant the whole flavour-idle design rests on.
+     */
+    if (!stagger || staggered.current) {
+      loop.start();
+      return () => loop.stop();
+    }
+    staggered.current = true;
+
     // Spread across the whole cycle, not a fixed 400ms window — at six perches
     // a 400ms spread put slots 0 and 5 within four display frames of each
     // other, which still reads as simultaneous.
@@ -98,11 +143,69 @@ function useFrameTranslate(anim: SpriteAnimation, size: number, paused: boolean,
       clearTimeout(timer);
       loop.stop();
     };
-  }, [t, total, paused, phase]);
+  }, [t, total, paused, phase, stagger]);
 
   return useMemo(
     () => t.interpolate({ inputRange, outputRange, extrapolate: 'clamp' }),
     [t, inputRange, outputRange],
+  );
+}
+
+/**
+ * Renders one frame of a sprite sheet, animated.
+ *
+ * Sheets come in two shapes. The whole-frame and action sheets are a single row
+ * of frames; the directional sheet is a grid, eight rows of eight compass
+ * facings. Both are handled the same way — size a clipping View to one frame
+ * and translate the full sheet behind it — with the row selected by a static
+ * translateY alongside the animated translateX.
+ *
+ * The row offset is deliberately NOT animated. A cat changes facing a handful
+ * of times a minute and never mid-frame, so paying for a second native value
+ * (and the interpolation to drive it) would buy nothing. Mixing a plain number
+ * into a transform array beside an Animated value is supported and stays on the
+ * native driver, because only the animated member needs lifting.
+ */
+function SheetSprite({
+  source,
+  anim,
+  frameCount,
+  rowCount = 1,
+  row = 0,
+  size,
+  paused,
+  phase,
+  stagger = true,
+  style,
+}: {
+  source: ImageSourcePropType;
+  anim: SpriteAnimation;
+  frameCount: number;
+  rowCount?: number;
+  row?: number;
+  size: number;
+  paused: boolean;
+  phase: number;
+  /** False when something else already decides when this sprite starts. */
+  stagger?: boolean;
+  style?: ViewStyle;
+}) {
+  const snapped = useMemo(() => snapSize(size), [size]);
+  const translateX = useFrameTranslate(anim, snapped, paused, phase, stagger);
+
+  return (
+    <View style={[{ width: snapped, height: snapped, overflow: 'hidden' }, style]}>
+      <Animated.Image
+        source={source}
+        style={{
+          width: snapped * frameCount,
+          height: snapped * rowCount,
+          transform: [{ translateX }, { translateY: -row * snapped }],
+        }}
+        resizeMode="stretch"
+        fadeDuration={0}
+      />
+    </View>
   );
 }
 
@@ -114,23 +217,16 @@ function CatSpriteInner({
   phase = 0,
   style,
 }: CatSpriteProps) {
-  const snapped = useMemo(() => snapSize(size), [size]);
-  const anim = ANIMATIONS[animation];
-  const translateX = useFrameTranslate(anim, snapped, paused, phase);
-
   return (
-    <View style={[{ width: snapped, height: snapped, overflow: 'hidden' }, style]}>
-      <Animated.Image
-        source={getSpriteSheet(spriteId)}
-        style={{
-          width: snapped * FRAME_COUNT,
-          height: snapped,
-          transform: [{ translateX }],
-        }}
-        resizeMode="stretch"
-        fadeDuration={0}
-      />
-    </View>
+    <SheetSprite
+      source={getSpriteSheet(spriteId)}
+      anim={ANIMATIONS[animation]}
+      frameCount={FRAME_COUNT}
+      size={size}
+      paused={paused}
+      phase={phase}
+      style={style}
+    />
   );
 }
 
@@ -140,3 +236,96 @@ function CatSpriteInner({
  * all six sprites. Props are fully stable now that the loop lives natively.
  */
 export const CatSprite = React.memo(CatSpriteInner);
+
+// ---------------------------------------------------------------------------
+// Scene sprites
+// ---------------------------------------------------------------------------
+
+export interface SceneCatSpriteProps {
+  spriteId: string;
+  size?: number;
+  /** Stagger seed — normally the perch index. See CatSpriteProps.phase. */
+  phase?: number;
+  style?: ViewStyle;
+}
+
+/**
+ * A settled cat: front-facing, and capable of the whole flavour-idle
+ * repertoire.
+ *
+ * Reads the action sheet, which is one row rather than eight. That is what lets
+ * a cat blink, groom, yawn, glance around and flick its tail for roughly a
+ * megabyte and a half per breed — the same six animations on the directional
+ * sheet would cost eight times that, and a settled cat has no use for seven of
+ * those directions.
+ */
+export const SettledCatSprite = React.memo(function SettledCatSprite({
+  spriteId,
+  animation,
+  size = SOURCE_FRAME_SIZE,
+  phase = 0,
+  paused = false,
+  style,
+}: SceneCatSpriteProps & { animation: ActAnimation; paused?: boolean }) {
+  return (
+    <SheetSprite
+      source={getActSpriteSheet(spriteId)}
+      anim={ACT_ANIMATIONS[animation]}
+      frameCount={ACT_FRAME_COUNT}
+      size={size}
+      paused={paused}
+      phase={phase}
+      /**
+       * No stagger. useCatLife holds each flavour idle for exactly its own
+       * cycle length and then picks the next one, so the art has to run in
+       * phase with that scheduler — any offset here truncates the tail of
+       * every animation and leaves the cat mid-groom when it switches. Cats
+       * are already desynchronised from each other by their scheduler start
+       * offsets and by choosing different idles.
+       */
+      stagger={false}
+      style={style}
+    />
+  );
+});
+
+/**
+ * A cat on the move: any of eight facings, walking, idling or dozing.
+ *
+ * Reads the directional sheet. Kept separate from SettledCatSprite rather than
+ * merged behind a flag because the two draw from different textures, and which
+ * texture a cat holds open is the single biggest memory decision in the scene.
+ * Making it a prop would hide that; making it a component makes it obvious at
+ * every call site.
+ */
+export const WalkingCatSprite = React.memo(function WalkingCatSprite({
+  spriteId,
+  direction,
+  animation,
+  size = SOURCE_FRAME_SIZE,
+  phase = 0,
+  style,
+}: SceneCatSpriteProps & {
+  direction: SpriteDirection;
+  animation: keyof typeof DIR_ANIMATIONS;
+}) {
+  const row = Math.max(0, DIRECTIONS.indexOf(direction));
+
+  return (
+    <SheetSprite
+      source={getDirSpriteSheet(spriteId)}
+      anim={DIR_ANIMATIONS[animation]}
+      frameCount={DIR_FRAME_COUNT}
+      rowCount={DIRECTIONS.length}
+      row={row}
+      size={size}
+      paused={false}
+      phase={phase}
+      // A walk has to begin the instant the cat does. Holding frame 0 while
+      // the body translates is the single most obvious animation fault there
+      // is — the legs plant and the cat skates.
+      stagger={false}
+      style={style}
+    />
+  );
+});
