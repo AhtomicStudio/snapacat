@@ -157,6 +157,15 @@ function DriftingCloud({
   return (
     <Animated.View
       pointerEvents="none"
+      /**
+       * A cloud is four stacked Views that only ever translate as a unit, so
+       * it is exactly what a hardware texture is for: rasterise once, then
+       * move the texture instead of recomposing four layers every frame.
+       * Measured on an emulator, the ambience layer as a whole was doubling
+       * median frame time, and it is this kind of many-small-Views compositing
+       * that costs it.
+       */
+      renderToHardwareTextureAndroid
       style={{ position: 'absolute', left: 0, top: spec.top, transform: [{ translateX }] }}
     >
       <Cloud block={spec.block} colour={dark ? '#C9D2F0' : '#FFFFFF'} opacity={spec.opacity} />
@@ -190,7 +199,7 @@ export function StarField({
 }) {
   const stars = useMemo(() => {
     const out: { x: number; y: number; size: number; opacity: number; twinkles: boolean }[] = [];
-    for (let i = 0; i < 44; i++) {
+    for (let i = 0; i < 30; i++) {
       const vertical = noise(seed, i * 7 + 1);
       out.push({
         x: noise(seed, i * 7 + 2) * width,
@@ -207,7 +216,13 @@ export function StarField({
   const cycle = useCycle(4200);
 
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height: horizonY }}>
+    <View
+      pointerEvents="none"
+      // Most of these never change, so the whole field rasterises once instead
+      // of compositing thirty layers per frame.
+      renderToHardwareTextureAndroid
+      style={{ position: 'absolute', left: 0, top: 0, width, height: horizonY }}
+    >
       {stars.map((star, i) =>
         star.twinkles ? (
           <Animated.View
@@ -297,7 +312,7 @@ export function Motes({
   width,
   height,
   seed,
-  count = 14,
+  count = 8,
 }: {
   style: MoteStyle;
   width: number;
@@ -388,7 +403,7 @@ export function Fireflies({
   width,
   height,
   seed,
-  count = 7,
+  count = 4,
 }: {
   width: number;
   height: number;

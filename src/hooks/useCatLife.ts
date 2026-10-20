@@ -134,7 +134,19 @@ export function useCatLife({
    */
   const progress = useRef(new Animated.Value(0)).current;
 
-  const [activity, setActivity] = useState<CatActivity>({ kind: 'settled', animation: 'idle' });
+  /**
+   * Seeded from `asleep` rather than hardcoded to idle.
+   *
+   * The effect below corrects this a commit later, which is usually invisible —
+   * but on a cold start, with the whole scene mounting at once, the gap is long
+   * enough to see: caught on device showing a cat with a 💤 badge and its eyes
+   * wide open. Deriving the first value removes the window rather than
+   * shortening it.
+   */
+  const [activity, setActivity] = useState<CatActivity>(() => ({
+    kind: 'settled',
+    animation: asleep ? 'sleep' : 'idle',
+  }));
   /** The excursion currently animating, or null while standing still. */
   const [leg, setLeg] = useState<{ from: Spot; to: Spot } | null>(null);
   const [depth, setDepth] = useState(baseDepth);
