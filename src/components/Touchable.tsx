@@ -48,6 +48,21 @@ export interface TouchableProps extends Omit<PressableProps, 'style' | 'children
    * Pass `{}` to suppress all press feedback.
    */
   pressedStyle?: ViewStyle;
+  /**
+   * How this looks when `disabled`. There is deliberately NO default, because
+   * `disabled` means two different things in this app and they want opposite
+   * treatments:
+   *
+   *   unavailable  — out of stock, nothing typed yet, a save in flight.
+   *                  Should recede: `{ opacity: 0.45 }`.
+   *   already done — a theme you have equipped, an item you own. Should NOT
+   *                  recede; it is the good state, and fading it reads as
+   *                  broken. These pass nothing.
+   *
+   * Defaulting to a dim would have been wrong for three of the five call
+   * sites that existed when this was written.
+   */
+  disabledStyle?: ViewStyle;
   /** Scale target while held. 1 disables the spring. */
   scaleTo?: number;
   children?: React.ReactNode;
@@ -56,6 +71,7 @@ export interface TouchableProps extends Omit<PressableProps, 'style' | 'children
 export function Touchable({
   style,
   pressedStyle,
+  disabledStyle,
   scaleTo = 0.96,
   onPressIn,
   onPressOut,
@@ -99,8 +115,9 @@ export function Touchable({
       ...base,
       springs ? { transform: [{ scale }] } : null,
       pressed && needsPressedState ? pressedStyle : null,
+      disabled ? disabledStyle : null,
     ];
-  }, [style, pressedStyle, needsPressedState, pressed, springs, scale]);
+  }, [style, pressedStyle, disabledStyle, disabled, needsPressedState, pressed, springs, scale]);
 
   return (
     <AnimatedPressable

@@ -455,6 +455,8 @@ function FirstHoodScreen({ onCreate }: { onCreate: (name: string) => Promise<voi
       <Touchable
         onPress={submit}
         disabled={!name.trim() || busy}
+        disabledStyle={{ opacity: 0.45 }}
+        accessibilityState={{ busy }}
         style={{
           marginTop: 14,
           backgroundColor: '#FF8E53',
@@ -462,7 +464,6 @@ function FirstHoodScreen({ onCreate }: { onCreate: (name: string) => Promise<voi
           minHeight: 50,
           alignItems: 'center',
           justifyContent: 'center',
-          opacity: !name.trim() || busy ? 0.45 : 1,
         }}
       >
         <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 15 }}>

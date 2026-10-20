@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TextInput,
-  Pressable,
   ScrollView,
   StyleSheet,
   Alert,
@@ -56,6 +56,15 @@ export function FieldNotesScreen({
   const [notes, setNotes]                     = useState('');
   const [hasPhoto, setHasPhoto]               = useState(!!capturedPhotoUri);
   const [mockPixels, setMockPixels]           = useState<RGB[]>([]);
+  /**
+   * In flight. Submitting runs four awaits — a lookup, a create, a scrapbook
+   * write and a progression save — and a second tap during that window is a
+   * second pass through all of them. Both would read the Cat-a-log before
+   * either wrote to it, find no match, and create the same cat twice, with two
+   * scrapbook entries and two lots of PawPoints. Double-tapping a submit
+   * button is not an edge case.
+   */
+  const [submitting, setSubmitting] = useState(false);
 
   const catNameRef  = useRef<TextInput>(null);
   const hoodNameRef = useRef<TextInput>(null);
@@ -78,6 +87,10 @@ export function FieldNotesScreen({
   }
 
   async function handleSubmit() {
+    // The guard goes before the validation, not after: the validation Alerts
+    // are harmless to repeat, but anything past them is not.
+    if (submitting) return;
+
     if (!catName.trim()) {
       Alert.alert('Required Field', 'Please enter a name for the cat.');
       return;
@@ -87,6 +100,7 @@ export function FieldNotesScreen({
       return;
     }
 
+    setSubmitting(true);
     try {
       // Match only within this user's own Cat-a-log — names are reliable there.
       const myCats = await getCats(userId);
@@ -146,6 +160,11 @@ export function FieldNotesScreen({
     } catch (err) {
       console.error('Failed to submit field note:', err);
       Alert.alert('Error', 'Failed to log sighting. Please try again.');
+    } finally {
+      // In `finally` so a failed save hands the button back. Without it, one
+      // network blip would leave the screen permanently unable to submit and
+      // the only way out would be losing the note.
+      setSubmitting(false);
     }
   }
 
@@ -454,6 +473,11 @@ export function FieldNotesScreen({
       >
         <Touchable
           onPress={onBack}
+          // Backing out mid-write leaves the save to land on a screen that is
+          // gone, and the writes happen anyway — so the way out is closed
+          // until it finishes, which takes a moment.
+          disabled={submitting}
+          disabledStyle={{ opacity: 0.45 }}
           accessibilityRole="button"
           style={styles.footerSecondary}
         >
@@ -462,11 +486,21 @@ export function FieldNotesScreen({
 
         <Touchable
           onPress={handleSubmit}
+          disabled={submitting}
+          disabledStyle={{ opacity: 0.6 }}
           scaleTo={0.96}
           accessibilityRole="button"
+          accessibilityState={{ busy: submitting }}
           style={styles.footerPrimary}
         >
-          <Text style={styles.footerPrimaryText}>Log Spotting</Text>
+          {submitting ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <ActivityIndicator size="small" color={color.milk} />
+              <Text style={styles.footerPrimaryText}>Logging…</Text>
+            </View>
+          ) : (
+            <Text style={styles.footerPrimaryText}>Log Spotting</Text>
+          )}
         </Touchable>
       </View>
     </SafeAreaView>

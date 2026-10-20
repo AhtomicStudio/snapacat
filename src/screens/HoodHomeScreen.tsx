@@ -1005,11 +1005,12 @@ function HoodSwitcher({
                 <Touchable
                   onPress={submit}
                   disabled={!draftName.trim() || busy}
+                  disabledStyle={{ opacity: 0.45 }}
+                  accessibilityState={{ busy }}
                   style={{
                     flex: 1, minHeight: 46, borderRadius: 13,
                     alignItems: 'center', justifyContent: 'center',
                     backgroundColor: GINGER,
-                    opacity: !draftName.trim() || busy ? 0.45 : 1,
                   }}
                 >
                   <Text style={{ fontFamily: font.bold, color: '#FFFFFF', fontSize: 14 }}>
