@@ -68,6 +68,8 @@ const ACTOR_BASE_SIZE = 104;
 
 /** How fast each parallax layer tracks the camera. 1 = locked to the ground. */
 const PARALLAX_SKY = 0.20;
+/** The distant row — slower, so it slides behind the nearer one as you pan. */
+const PARALLAX_FAR = 0.38;
 const PARALLAX_BACKDROP = 0.55;
 
 // ---------------------------------------------------------------------------
@@ -92,8 +94,26 @@ function mixHex(a: string, b: string, t: number): string {
   return `#${to2(ar + (br - ar) * t)}${to2(ag + (bg - ag) * t)}${to2(ab + (bb - ab) * t)}`;
 }
 
-/** Number of bands used to approximate the sky gradient. */
-const SKY_BANDS = 12;
+/**
+ * Bands used to approximate the sky gradient.
+ *
+ * Twelve left visible steps across a 400pt sky — about 33pt per band, which is
+ * wide enough to read as stripes rather than as a gradient, and it was the
+ * single most amateur thing on the screen. Thirty-two puts each step at a
+ * value difference the eye cannot resolve against this palette.
+ */
+const SKY_BANDS = 32;
+
+/**
+ * How much a distant layer is washed toward the sky behind it.
+ *
+ * Atmospheric perspective: air between you and a thing desaturates it and
+ * pulls it toward the sky's colour, and its absence is why the skyline read as
+ * a sticker laid on top rather than as something a mile away. The backdrop is
+ * pushed a third of the way to the horizon colour, the mid layer a tenth.
+ */
+const HAZE_FAR = 0.34;
+const HAZE_MID = 0.12;
 
 // ---------------------------------------------------------------------------
 // Backdrop — seeded silhouette at the horizon
@@ -104,6 +124,12 @@ interface BuildingSpec {
   width: number;
   height: number;
   windows: number;
+  /** What sits on top. A flat row of rectangles is what reads as a placeholder. */
+  roof: 'flat' | 'parapet' | 'pitched' | 'stepped';
+  /** Rooftop furniture — the thing that makes a skyline look drawn rather than generated. */
+  tower: boolean;
+  antenna: boolean;
+  vents: number;
 }
 
 /**
@@ -125,7 +151,33 @@ function buildSkyline(seed: number): BuildingSpec[] {
     // behind it — which is exactly what happened at 26–110px against a 74px
     // wall: one tall block poked out and the rest of the sky read as empty.
     const height = 96 + r2 * 150;
-    specs.push({ left: cursor, width, height, windows: 3 + Math.floor(r1 * 8) });
+    const r3 = ((seed ^ Math.imul(i + 13, 0x9e3779b1)) >>> 8) / 0xffffff;
+    const r4 = ((seed ^ Math.imul(i + 23, 0xc2b2ae35)) >>> 8) / 0xffffff;
+
+    /**
+     * Roof shape and furniture.
+     *
+     * A row of plain rectangles reads as a placeholder no matter how well the
+     * heights are randomised, because every silhouette meets the sky at the
+     * same angle. What a real skyline has is variety at the TOP edge — that is
+     * the only part of a distant building you actually see — so the shape and
+     * what stands on it are rolled per building, and weighted so that plain
+     * flat roofs stay the majority and the water towers stay rare enough to
+     * be worth noticing.
+     */
+    const roof: BuildingSpec['roof'] =
+      r3 < 0.52 ? 'flat' : r3 < 0.74 ? 'parapet' : r3 < 0.89 ? 'stepped' : 'pitched';
+
+    specs.push({
+      left: cursor,
+      width,
+      height,
+      windows: 3 + Math.floor(r1 * 8),
+      roof,
+      tower: r4 > 0.82 && roof !== 'pitched',
+      antenna: r4 < 0.2,
+      vents: r3 > 0.6 ? 1 + Math.floor(r4 * 2) : 0,
+    });
     // Overlap slightly so the roofline reads as a continuous block, not a fence.
     cursor += width - 0.005;
     i++;
@@ -153,20 +205,69 @@ function Backdrop({
       pointerEvents="none"
       style={{ position: 'absolute', left: 0, width, top: 0, height: horizonY }}
     >
-      {skyline.map((b, i) => (
+      {skyline.map((b, i) => {
+        const bw = b.width * width;
+        return (
+        <React.Fragment key={i}>
+          {/* ── Roof furniture, drawn behind the block so it rises out of it ── */}
+          {b.tower && (
+            // Water tower: a barrel on legs. The most recognisable rooftop
+            // silhouette there is, and the reason an American skyline reads as
+            // one at a glance.
+            <View style={{ position: 'absolute', left: b.left * width + bw * 0.42, bottom: b.height - 2, alignItems: 'center' }}>
+              <View style={{ width: 14, height: 11, borderTopLeftRadius: 5, borderTopRightRadius: 5, backgroundColor: colour }} />
+              <View style={{ flexDirection: 'row', gap: 7 }}>
+                <View style={{ width: 2, height: 7, backgroundColor: colour }} />
+                <View style={{ width: 2, height: 7, backgroundColor: colour }} />
+              </View>
+            </View>
+          )}
+          {b.antenna && (
+            <View style={{ position: 'absolute', left: b.left * width + bw * 0.7, bottom: b.height - 1, width: 2, height: 16, backgroundColor: colour }} />
+          )}
+          {Array.from({ length: b.vents }, (_, v) => (
+            <View
+              key={`v${v}`}
+              style={{
+                position: 'absolute',
+                left: b.left * width + bw * (0.12 + v * 0.3),
+                bottom: b.height - 1,
+                width: 7, height: 5, backgroundColor: colour,
+              }}
+            />
+          ))}
+          {b.roof === 'pitched' && (
+            // Faked with a rotated square: a true triangle needs borderWidth
+            // tricks that fight the parallax transform on the parent.
+            <View
+              style={{
+                position: 'absolute',
+                left: b.left * width + bw / 2 - bw * 0.3,
+                bottom: b.height - bw * 0.21,
+                width: bw * 0.6, height: bw * 0.6,
+                backgroundColor: colour,
+                transform: [{ rotate: '45deg' }],
+              }}
+            />
+          )}
+
         <View
-          key={i}
           style={{
             position: 'absolute',
             left: b.left * width,
-            width: b.width * width,
+            width: bw,
             height: b.height,
             bottom: 0,
             backgroundColor: colour,
-            borderTopLeftRadius: i % 3 === 0 ? 3 : 0,
-            borderTopRightRadius: i % 4 === 0 ? 3 : 0,
+            borderTopLeftRadius: b.roof === 'stepped' ? 3 : 0,
+            borderTopRightRadius: b.roof === 'stepped' ? 3 : 0,
           }}
         >
+          {b.roof === 'parapet' && (
+            // A lip along the roofline, slightly proud of the block. Catches
+            // the eye as a built edge rather than a cut.
+            <View style={{ position: 'absolute', top: -3, left: -2, right: -2, height: 4, backgroundColor: colour }} />
+          )}
           {lit && (
             <View
               style={{
@@ -192,7 +293,9 @@ function Backdrop({
             </View>
           )}
         </View>
-      ))}
+        </React.Fragment>
+        );
+      })}
     </View>
   );
 }
@@ -247,20 +350,47 @@ function MidWall({
         Array.from({ length: Math.ceil(wallHeight / 12) }, (_, row) => (
           <View key={row} style={{ position: 'absolute', left: 0, right: 0, top: row * 12 }}>
             <View style={{ height: 1.5, backgroundColor: seam, opacity: 0.85 }} />
-            {Array.from({ length: Math.ceil(width / 26) + 1 }, (_, col) => (
-              <View
-                key={col}
-                style={{
-                  position: 'absolute',
-                  left: col * 26 + (row % 2 ? 13 : 0),
-                  top: 1,
-                  width: 1.5,
-                  height: 11,
-                  backgroundColor: seam,
-                  opacity: 0.7,
-                }}
-              />
-            ))}
+            {Array.from({ length: Math.ceil(width / 26) + 1 }, (_, col) => {
+              /**
+               * Shade the odd brick darker or lighter.
+               *
+               * Uniform brick is the giveaway: a real wall is laid from bricks
+               * that were fired in different batches, and the eye reads that
+               * variation long before it reads the mortar pattern. One in
+               * three or so gets a tint, deterministically, so a Hood keeps
+               * the same wall every visit.
+               */
+              const n = (row * 31 + col * 17) % 9;
+              const tint = n === 0 ? '#000000' : n === 4 ? '#FFFFFF' : null;
+              return (
+                <React.Fragment key={col}>
+                  {tint && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 26 + (row % 2 ? 13 : 0) + 1.5,
+                        top: 1.5,
+                        width: 24.5,
+                        height: 10,
+                        backgroundColor: tint,
+                        opacity: tint === '#000000' ? 0.07 : 0.05,
+                      }}
+                    />
+                  )}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: col * 26 + (row % 2 ? 13 : 0),
+                      top: 1,
+                      width: 1.5,
+                      height: 11,
+                      backgroundColor: seam,
+                      opacity: 0.7,
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
           </View>
         ))}
 
@@ -394,8 +524,100 @@ function GroundDressing({
     return out;
   }, [seed, width, height]);
 
+  /**
+   * Broad tonal patches, under the grit.
+   *
+   * Fine speckle alone cannot fix a large flat colour field — it adds detail at
+   * one frequency and leaves the low frequency untouched, so the ground still
+   * reads as one slab with dust on it. Real asphalt varies in big soft areas:
+   * where it was patched, where it stays wet, where the sun has bleached it.
+   * These are deliberately huge and nearly invisible individually; what they
+   * do is stop any two parts of the ground being the same colour.
+   */
+  const patches = useMemo(() => {
+    const out: { x: number; y: number; w: number; h: number; o: number; light: boolean }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const r1 = ((seed ^ Math.imul(i + 31, 0x2545f491)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 47, 0x9e3779b9)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 59, 0x7feb352d)) >>> 8) / 0xffffff;
+      /**
+       * Very large and very faint, and that combination is the whole point.
+       *
+       * The first attempt used patches about a fifth of the world wide at 2-7%
+       * opacity, which rendered as a field of distinct grey discs — worse than
+       * the flat colour it replaced, because a visible hard-edged circle is a
+       * shape the eye names. There is no blur available without a dependency,
+       * so the edge has to be hidden by scale instead: at a third to four
+       * fifths of the world across, most of each patch's boundary is off the
+       * viewport at any pan position, and what remains is a gradient too
+       * gradual to resolve.
+       */
+      const w = width * (0.34 + r3 * 0.46);
+      out.push({
+        x: r1 * width - w / 2,
+        y: r2 * height - height * 0.25,
+        w,
+        h: height * (0.55 + r3 * 0.5),
+        o: 0.012 + r3 * 0.022,
+        light: r1 > 0.5,
+      });
+    }
+    return out;
+  }, [seed, width, height]);
+
+  /**
+   * Seams and cracks. Thin, long, mostly horizontal — asphalt joints run with
+   * the road, and a crack is the one piece of ground detail the eye reads as
+   * surface rather than as dirt.
+   */
+  const seams = useMemo(() => {
+    const out: { x: number; y: number; w: number; tilt: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const r1 = ((seed ^ Math.imul(i + 71, 0x85ebca77)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 83, 0xc2b2ae3d)) >>> 8) / 0xffffff;
+      out.push({
+        x: r1 * width,
+        y: 0.18 * height + r2 * height * 0.72,
+        w: width * (0.06 + r2 * 0.14),
+        tilt: `${(r1 - 0.5) * 7}deg`,
+      });
+    }
+    return out;
+  }, [seed, width, height]);
+
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
+      {/* Low frequency first, so grit and cracks sit on top of the mottling. */}
+      {patches.map((p, i) => (
+        <View
+          key={`p${i}`}
+          style={{
+            position: 'absolute',
+            left: p.x,
+            top: p.y,
+            width: p.w,
+            height: p.h,
+            borderRadius: p.w / 2,
+            backgroundColor: p.light ? '#FFFFFF' : '#000000',
+            opacity: dark ? p.o * 0.65 : p.o,
+          }}
+        />
+      ))}
+      {seams.map((s, i) => (
+        <View
+          key={`s${i}`}
+          style={{
+            position: 'absolute',
+            left: s.x,
+            top: s.y,
+            width: s.w,
+            height: 1.5,
+            backgroundColor: '#000000',
+            opacity: dark ? 0.10 : 0.13,
+            transform: [{ rotate: s.tilt }],
+          }}
+        />
+      ))}
       {bits.map((b, i) => (
         <View
           key={i}
@@ -900,8 +1122,31 @@ export function HoodScene({
             <Clouds width={worldW} horizonY={horizonY} seed={seed} dark={dark} />
           </Animated.View>
 
-          {/* ── Mid layer: skyline. The parallax against the ground while  */}
-          {/*    panning is what actually reads as depth.                   */}
+          {/* ── Far layer: the distant skyline, washed toward the sky.     */}
+          {/*    Two rows of buildings rather than one, at different rates: */}
+          {/*    a single silhouette parallaxing against the ground gives   */}
+          {/*    depth, but only one step of it, which is what made the     */}
+          {/*    backdrop read as a painted flat rather than as distance.   */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: worldW,
+              height: horizonY,
+              transform: [{ translateX: parallax(PARALLAX_FAR) }],
+            }}
+          >
+            <Backdrop
+              seed={seed ^ 0x5bf03635}
+              width={worldW}
+              horizonY={horizonY * 0.88}
+              colour={mixHex(palette.backdrop, palette.low, HAZE_FAR)}
+              lit={false}
+            />
+          </Animated.View>
+
           <Animated.View
             pointerEvents="none"
             style={{
@@ -917,7 +1162,7 @@ export function HoodScene({
               seed={seed}
               width={worldW}
               horizonY={horizonY}
-              colour={palette.backdrop}
+              colour={mixHex(palette.backdrop, palette.low, HAZE_MID)}
               lit={dark}
             />
           </Animated.View>

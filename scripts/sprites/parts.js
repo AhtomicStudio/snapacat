@@ -299,27 +299,35 @@ function buildHead_S(variant) {
     if (!flicking) fspan(y, 31 - x1, 31 - x0, SLOT.PINK, R.EAR);
   }
   if (flicking) fspan(6, 22, 23, SLOT.PINK, R.EAR);
-  // Under-lash
-  fspanMirror(11, 11, 13, SLOT.OUTLINE_SOFT, R.HEAD);
-
   const shut = variant === HEAD_V.SHUT || variant === HEAD_V.YAWN || variant === HEAD_V.LICK;
+
+  /**
+   * The brow line above the eyes — on the OPEN poses only.
+   *
+   * It is the top edge of an open eye, and stacking it above a closed lid is
+   * what turned sleeping cats into skulls: brow at y11, lid at y12 and y13
+   * gave three solid dark rows in each socket, which at display size is not an
+   * eyelid, it is a hole.
+   */
+  if (!shut) fspanMirror(11, 11, 13, SLOT.OUTLINE_SOFT, R.HEAD);
 
   if (shut) {
     /**
-     * Closed eyes, two rows deep.
+     * A closed eye is a LINE, not a filled socket.
      *
-     * One row of lid left the lower row of each eye socket showing plain coat,
-     * so open-to-shut changed about twelve pixels — 2.2% of the sprite, and
-     * the smallest movement of any idle by a factor of twelve. At the size
-     * cats render, a blink that quiet is a blink nobody sees. Taking the lid
-     * down over both rows doubles the change and, more usefully, swaps EYE for
-     * OUTLINE_SOFT rather than for COAT_BASE, so it is a value change as well
-     * as a shape change. It also gives the sleep pose a far stronger read.
+     * One row, and drawn WIDER than the open eye rather than taller — x10-14
+     * against the iris's x11-13. That is what a lid actually does: it stretches
+     * across the socket, so the dark shape gets longer and flatter, not deeper.
+     * The extra pixel at each end is also what sells it at a glance, because
+     * length survives downsampling where a second row just reads as mass.
+     *
+     * The previous version went two rows deep chasing a bigger blink delta, on
+     * the theory that the change needed to be large to be seen. It was seen —
+     * as empty eye sockets. The motion metric said the animation was working;
+     * only looking at it on a device said what it looked like.
      */
-    fspan(12, 11, 13, SLOT.OUTLINE_SOFT, R.HEAD);
-    fspan(12, 18, 20, SLOT.OUTLINE_SOFT, R.HEAD);
-    fspan(13, 11, 13, SLOT.OUTLINE_SOFT, R.HEAD);
-    fspan(13, 18, 20, SLOT.OUTLINE_SOFT, R.HEAD);
+    fspan(12, 10, 14, SLOT.OUTLINE_SOFT, R.HEAD);
+    fspan(12, 17, 21, SLOT.OUTLINE_SOFT, R.HEAD);
   } else if (variant === HEAD_V.SQUINT) {
     // Half-lidded: the upper lid drops onto the top row of the eye, leaving one
     // row of iris. Going straight from two rows of eye to none is a one-frame
