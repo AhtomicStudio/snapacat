@@ -198,9 +198,9 @@ export function FieldNotesScreen({
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
               <Text style={{ fontSize: 13, fontFamily: font.bold, color: '#2C2A29' }}>📸 Photo captured</Text>
               {onRetakePhoto && (
-                <Pressable onPress={onRetakePhoto} hitSlop={HIT_SLOP_MD}>
+                <Touchable onPress={onRetakePhoto} hitSlop={HIT_SLOP_MD} scaleTo={0.94}>
                   <Text style={{ fontSize: 12, color: '#E67035', fontFamily: font.bold}}>Retake →</Text>
-                </Pressable>
+                </Touchable>
               )}
             </View>
           </View>
@@ -302,17 +302,17 @@ export function FieldNotesScreen({
                 <Text style={{ fontSize: 9, fontFamily: font.bold, color: '#E67035', letterSpacing: 1 }}>AUTO</Text>
               </View>
             </View>
-            <Pressable onPress={() => setOverridePicker(true)} style={{ marginTop: 12, alignSelf: 'flex-end' }}>
+            <Touchable onPress={() => setOverridePicker(true)} hitSlop={HIT_SLOP_MD} scaleTo={0.94} style={{ marginTop: 12, alignSelf: 'flex-end', paddingVertical: 6 }}>
               <Text style={{ fontSize: 11, color: '#B0ABA6' }}>Not right? Change ›</Text>
-            </Pressable>
+            </Touchable>
           </View>
         ) : (
           // Manual picker — full 20-sprite horizontal scroll
           <View style={GROUP_CARD}>
             {matchedSpriteId && (
-              <Pressable onPress={() => { setSpriteTemplate(matchedSpriteId); setOverridePicker(false); }} style={{ marginBottom: 8, alignSelf: 'flex-end' }}>
+              <Touchable onPress={() => { setSpriteTemplate(matchedSpriteId); setOverridePicker(false); }} hitSlop={HIT_SLOP_MD} scaleTo={0.94} style={{ marginBottom: 8, alignSelf: 'flex-end', paddingVertical: 6 }}>
                 <Text style={{ fontSize: 11, color: '#FF8E53' }}>← Back to detected sprite</Text>
-              </Pressable>
+              </Touchable>
             )}
             <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#706B67', marginBottom: 8 }}>
               Sprite Signature Look

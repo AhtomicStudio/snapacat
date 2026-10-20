@@ -519,9 +519,11 @@ function SceneCat({
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel="A visiting cat"
-        // Scale the whole actor, shadow included, so the press reads as the cat
-        // reacting rather than the sprite detaching from the ground.
-        pressedStyle={{ transform: [{ scale: 1.07 }] }}
+        // Scales UP, not down. The whole actor including its shadow, so the
+        // press reads as the cat reacting rather than the sprite detaching
+        // from the ground — and up rather than in, because a cat you poke
+        // should perk toward you, not shrink away.
+        scaleTo={1.07}
         style={{
           width: size,
           height: size,
@@ -694,7 +696,9 @@ function SceneItem({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${def.label} — tap to put away`}
-      pressedStyle={{ transform: [{ scale: 0.9 }], opacity: 0.75 }}
+      // Presses in and dims — it is about to be picked up and put away.
+      scaleTo={0.9}
+      pressedStyle={{ opacity: 0.75 }}
       style={frame}
     >
       {body}

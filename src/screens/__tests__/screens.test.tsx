@@ -27,6 +27,10 @@ jest.mock('react-native', () => {
     multiply: () => 0,
     View: (props: any) => React.createElement('View', props, props.children),
     Text: (props: any) => React.createElement('Text', props, props.children),
+    // Touchable wraps Pressable so a press can drive a native-driven spring.
+    // The mock just hands the component straight back — the animation is not
+    // what these tests are about, but its absence stopped the suite loading.
+    createAnimatedComponent: (C: any) => C,
   };
   const UIManager = { setLayoutAnimationEnabledExperimental: jest.fn() };
   const LayoutAnimation = { configureNext: jest.fn(), Presets: { easeInEaseOut: {} } };

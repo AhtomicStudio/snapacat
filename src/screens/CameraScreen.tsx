@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Camera, useCameraDevice, useCameraPermission, usePhotoOutput } from 'react-native-vision-camera';
 import { detectCatInPhoto } from '../utils/catDetection';
-import { BUTTON_SHADOW } from '../utils/styles';
+import { BUTTON_SHADOW, HIT_SLOP_MD } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
 import { font } from '../theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -66,9 +67,10 @@ function ZoomControls({ activeZoom, onZoom }: { activeZoom: ZoomLevel; onZoom: (
       {ZOOM_LEVELS.map((z) => {
         const isActive = z === activeZoom;
         return (
-          <Pressable
+          <Touchable
             key={z}
             onPress={() => onZoom(z)}
+            scaleTo={0.88}
             style={{
               width: isActive ? 44 : 38,
               height: isActive ? 44 : 38,
@@ -83,7 +85,7 @@ function ZoomControls({ activeZoom, onZoom }: { activeZoom: ZoomLevel; onZoom: (
             <Text style={{ color: '#FFFFFF', fontSize: isActive ? 13 : 11, fontFamily: font.bold, letterSpacing: -0.3 }}>
               {z}×
             </Text>
-          </Pressable>
+          </Touchable>
         );
       })}
     </View>
@@ -113,8 +115,9 @@ function PermissionGate({
         Snapping real neighborhood cats is how you fill your Cat-a-log. Photos stay on your device.
       </Text>
 
-      <Pressable
+      <Touchable
         onPress={denied ? () => Linking.openSettings() : onRequest}
+        scaleTo={0.97}
         style={[
           BUTTON_SHADOW,
           {
@@ -126,11 +129,11 @@ function PermissionGate({
         <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 15 }}>
           {denied ? 'Open Settings' : 'Allow Camera Access'}
         </Text>
-      </Pressable>
+      </Touchable>
 
-      <Pressable onPress={onClose} style={{ marginTop: 18, paddingVertical: 8 }}>
+      <Touchable onPress={onClose} scaleTo={0.94} hitSlop={HIT_SLOP_MD} style={{ marginTop: 18, paddingVertical: 14, alignItems: 'center' }}>
         <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13 }}>Not now</Text>
-      </Pressable>
+      </Touchable>
     </View>
   );
 }
@@ -191,8 +194,9 @@ function CatFoundSheet({ onProceed, onRetake }: { onProceed: () => void; onRetak
         Looking good! Ready to add this furball to your Cat-a-log?
       </Text>
 
-      <Pressable
+      <Touchable
         onPress={onProceed}
+        scaleTo={0.97}
         style={[
           BUTTON_SHADOW,
           { marginTop: 24, backgroundColor: '#FFFFFF', borderRadius: 18, paddingVertical: 17, alignItems: 'center' },
@@ -201,11 +205,11 @@ function CatFoundSheet({ onProceed, onRetake }: { onProceed: () => void; onRetak
         <Text style={{ color: '#E67035', fontFamily: font.bold, fontSize: 16 }}>
           Log This Sighting →
         </Text>
-      </Pressable>
+      </Touchable>
 
-      <Pressable onPress={onRetake} style={{ marginTop: 16, alignItems: 'center', paddingVertical: 8 }}>
+      <Touchable onPress={onRetake} scaleTo={0.94} hitSlop={HIT_SLOP_MD} style={{ marginTop: 16, alignItems: 'center', paddingVertical: 14 }}>
         <Text style={{ color: 'rgba(255,255,255,0.58)', fontSize: 13 }}>Retake photo</Text>
-      </Pressable>
+      </Touchable>
     </Animated.View>
   );
 }
@@ -244,18 +248,19 @@ function NoCatSheet({
         We couldn't find a cat in that photo. Try getting closer or in better light.
       </Text>
 
-      <Pressable
+      <Touchable
         onPress={onRetake}
+        scaleTo={0.97}
         style={[BUTTON_SHADOW, { marginTop: 24, backgroundColor: '#FF8E53', borderRadius: 16, paddingVertical: 17, alignItems: 'center' }]}
       >
         <Text style={{ color: '#FFFFFF', fontFamily: font.bold, fontSize: 16 }}>Try Again</Text>
-      </Pressable>
+      </Touchable>
 
-      <Pressable onPress={onLogAnyway} style={{ marginTop: 16, alignItems: 'center', paddingVertical: 8 }}>
+      <Touchable onPress={onLogAnyway} scaleTo={0.94} hitSlop={HIT_SLOP_MD} style={{ marginTop: 16, alignItems: 'center', paddingVertical: 14 }}>
         <Text style={{ color: '#706B67', fontSize: 12 }}>
           Log anyway without a photo →
         </Text>
-      </Pressable>
+      </Touchable>
     </Animated.View>
   );
 }
@@ -399,24 +404,26 @@ export function CameraScreen({
       <SafeAreaView style={{ flex: 1 }}>
         {/* ── Top bar ───────────────────────────────────── */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.36)' }}>
-          <Pressable
+          <Touchable
             onPress={onBack}
+            scaleTo={0.88}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.13)', alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.85)' }}>✕</Text>
-          </Pressable>
+          </Touchable>
 
           <View style={{ alignItems: 'center' }}>
             <Text style={{ color: '#FFFFFF', fontSize: 15, fontFamily: font.bold}}>SnapaCat</Text>
             <Text style={{ color: 'rgba(255,255,255,0.35)', fontSize: 9, letterSpacing: 2 }}>SNAP MODE</Text>
           </View>
 
-          <Pressable
+          <Touchable
             onPress={() => setFlashOn((f) => !f)}
+            scaleTo={0.88}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: flashOn ? 'rgba(255,142,83,0.4)' : 'rgba(255,255,255,0.13)', alignItems: 'center', justifyContent: 'center' }}
           >
             <Text style={{ fontSize: 18 }}>⚡</Text>
-          </Pressable>
+          </Touchable>
         </View>
 
         {/* ── Viewfinder bracket frame + floating zoom indicator ── */}
@@ -464,12 +471,13 @@ export function CameraScreen({
               </Animated.View>
 
               {/* Quick Cat-a-log */}
-              <Pressable
+              <Touchable
                 onPress={onOpenCatalog}
+                scaleTo={0.9}
                 style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.13)', alignItems: 'center', justifyContent: 'center' }}
               >
                 <Text style={{ fontSize: 22 }}>🐱</Text>
-              </Pressable>
+              </Touchable>
             </View>
 
           </>

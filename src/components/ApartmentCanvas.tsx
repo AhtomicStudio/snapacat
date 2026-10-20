@@ -9,6 +9,7 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, View, Text, Pressable } from 'react-native';
+import { Touchable } from './Touchable';
 import { APARTMENT_SLOTS } from '../config/apartment';
 import { PLACEABLE_ITEMS, MAX_HOOD_CATS } from '../utils/spawnCalculator';
 import { CatSprite } from './CatSprite';
@@ -176,9 +177,10 @@ function PlacedItem({
   }, [scale]);
 
   return (
-    <Pressable
+    <Touchable
       disabled={disabled}
       onPress={onPress}
+      scaleTo={0.9}
       style={{ position: 'absolute', left: `${x}%`, top: `${y}%` }}
     >
       <Animated.View
@@ -193,7 +195,7 @@ function PlacedItem({
       >
         <Text style={{ fontSize: 22 }}>{emoji}</Text>
       </Animated.View>
-    </Pressable>
+    </Touchable>
   );
 }
 
@@ -397,9 +399,10 @@ export function ApartmentCanvas({
         if (readOnly) return null;
 
         return (
-          <Pressable
+          <Touchable
             key={slot.slot_id}
             onPress={() => onPressEmptySlot?.(slot.slot_id)}
+            scaleTo={0.9}
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             style={{ position: 'absolute', left: `${slot.x}%`, top: `${slot.y}%` }}
           >
@@ -415,7 +418,7 @@ export function ApartmentCanvas({
             >
               <Text style={{ fontSize: 17, color: isNight ? 'rgba(255,255,255,0.8)' : '#E67035', fontFamily: font.medium}}>+</Text>
             </Animated.View>
-          </Pressable>
+          </Touchable>
         );
       })}
 

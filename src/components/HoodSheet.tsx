@@ -18,6 +18,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Animated, PanResponder, Pressable, View } from 'react-native';
+import { Touchable } from './Touchable';
 
 export const SHEET_PEEK_HEIGHT = 96;
 
@@ -122,8 +123,9 @@ export function HoodSheet({
     >
       {/* Grab area — drag anywhere on the peek, or tap it to toggle */}
       <View {...pan.panHandlers}>
-        <Pressable
+        <Touchable
           onPress={() => onChange(!expanded)}
+          scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel={expanded ? 'Close the decorating drawer' : 'Open the decorating drawer'}
           style={{ paddingTop: 10 }}
@@ -138,7 +140,7 @@ export function HoodSheet({
             }}
           />
           <View style={{ minHeight: peekHeight - 14, justifyContent: 'center' }}>{peek}</View>
-        </Pressable>
+        </Touchable>
       </View>
 
       {children}

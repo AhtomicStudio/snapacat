@@ -743,6 +743,10 @@ export function HoodHomeScreen({
         animationType="fade"
         onRequestClose={() => setPickerSlotId(null)}
       >
+        {/* Raw Pressable, not Touchable, and deliberately so: this is a
+            dismiss scrim. A backdrop that flinches when you tap it to close
+            reads as a button you hit by mistake. Same for the inner one,
+            which exists only to stop taps on the sheet reaching the scrim. */}
         <Pressable
           style={{ flex: 1, backgroundColor: 'rgba(20,14,8,0.45)', justifyContent: 'flex-end' }}
           onPress={() => setPickerSlotId(null)}

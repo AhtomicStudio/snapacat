@@ -192,8 +192,9 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
       <SafeAreaView style={{ flex: 1 }}>
 
         {/* Close button */}
-        <Pressable
+        <Touchable
           onPress={onBack}
+          scaleTo={0.88}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={{
             position: 'absolute', top: 12, left: 16, zIndex: 20,
@@ -203,7 +204,7 @@ export function SpriteRevealScreen({ capturedPhotoUri, onContinue, onBack }: Spr
           }}
         >
           <Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15 }}>✕</Text>
-        </Pressable>
+        </Touchable>
 
         {/* ── Analyzing overlay ─────────────────────────────────────────── */}
         <Animated.View
