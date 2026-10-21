@@ -25,6 +25,11 @@ export interface SpriteAnimation {
   frames: number[];
   /** Per-frame hold time in ms, parallel to `frames`. Asymmetric timings carry the ease. */
   durations: number[];
+  /**
+   * Which band of a wrapped sheet these frames live on. Absent means the
+   * top band, which is every sheet that still fits on one row.
+   */
+  row?: number;
 }
 
 export const ANIMATIONS: Record<'idle' | 'sleep', SpriteAnimation> = {
@@ -146,18 +151,24 @@ export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
  * `idle` is on this sheet as well as the directional one, so a cat that never
  * moves never decodes the big texture.
  */
-export const ACT_FRAME_COUNT = 26;
+export const ACT_FRAME_COUNT = 14;
 
-export type ActAnimation = 'idle' | 'blink' | 'groom' | 'yawn' | 'look' | 'tailflick' | 'sleep';
+/** How many bands the action sheet is wrapped into. */
+export const ACT_ROW_COUNT = 3;
+
+export type ActAnimation = 'idle' | 'blink' | 'groom' | 'yawn' | 'look' | 'tailflick' | 'sleep' | 'eat' | 'paw' | 'sniff';
 
 export const ACT_ANIMATIONS: Record<ActAnimation, SpriteAnimation> = {
-  idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
-  blink: { frames: [3, 4, 5, 4, 6, 7, 6, 4, 5, 4, 3, 4], durations: [560, 130, 420, 130, 60, 110, 90, 130, 420, 130, 460, 130] },
-  groom: { frames: [8, 9, 10, 11, 10, 11, 10, 9, 8], durations: [700, 90, 170, 130, 150, 130, 210, 110, 820] },
-  yawn: { frames: [12, 13, 14, 15, 12], durations: [900, 300, 540, 120, 900] },
-  look: { frames: [16, 17, 18, 17, 16, 19, 16], durations: [680, 260, 180, 200, 320, 440, 700] },
-  tailflick: { frames: [20, 21, 20, 22, 20], durations: [760, 320, 240, 320, 820] },
-  sleep: { frames: [23, 24, 25, 24], durations: [1400, 220, 700, 220] },
+  idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130], row: 0 },
+  blink: { frames: [3, 4, 5, 4, 6, 7, 6, 4, 5, 4, 3, 4], durations: [560, 130, 420, 130, 60, 110, 90, 130, 420, 130, 460, 130], row: 0 },
+  groom: { frames: [8, 9, 10, 11, 10, 11, 10, 9, 8], durations: [700, 90, 170, 130, 150, 130, 210, 110, 820], row: 0 },
+  yawn: { frames: [0, 1, 2, 3, 0], durations: [900, 300, 540, 120, 900], row: 1 },
+  look: { frames: [4, 5, 6, 5, 4, 7, 4], durations: [680, 260, 180, 200, 320, 440, 700], row: 1 },
+  tailflick: { frames: [8, 9, 8, 10, 8], durations: [760, 320, 240, 320, 820], row: 1 },
+  sleep: { frames: [11, 12, 13, 12], durations: [1400, 220, 700, 220], row: 1 },
+  eat: { frames: [0, 1, 2, 3, 2, 3, 2, 1, 0], durations: [520, 120, 260, 200, 220, 200, 260, 130, 620], row: 2 },
+  paw: { frames: [4, 5, 6, 7, 6, 5, 4], durations: [620, 150, 130, 160, 130, 150, 660], row: 2 },
+  sniff: { frames: [8, 9, 10, 9, 10, 9, 8], durations: [620, 140, 120, 120, 120, 160, 660], row: 2 },
 };
 
 /** Every flavour idle, i.e. everything a settled cat can do except plain idle. */
@@ -168,6 +179,9 @@ export const FLAVOUR_IDLES: ActAnimation[] = [
   'look',
   'tailflick',
   'sleep',
+  'eat',
+  'paw',
+  'sniff',
 ];
 
 export const SPRITE_SHEETS_ACT: Record<string, ImageSourcePropType> = {

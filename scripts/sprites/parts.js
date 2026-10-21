@@ -1058,13 +1058,56 @@ const LEG_LAYOUT = {
  * The paw flares one pixel left and loses one on the last row, which is what
  * stops it reading as a rectangle.
  */
-function buildLeg(dir, legId) {
+/** Leg poses. Only S/legFL authors the raised one; see buildLeg. */
+const LEG_V = { STAND: 0, RAISED: 1 };
+
+function buildLeg(dir, legId, variant = LEG_V.STAND) {
   const { cell, fspan, fset } = makeBuilder(legId, dir);
   const R = REGION;
+
+  /**
+   * A forepaw lifted and reaching out to the side.
+   *
+   * This exists because the obvious way to animate batting — offset the
+   * standing leg upward — cannot work front-on. The forepaws are four
+   * pixel stubs poking below a chest that spans x6 to x28, so lifting
+   * one hides it behind the body and the animation reads as a paw going
+   * missing. Swinging it sideways gets three pixels past the outline,
+   * which reads as a twitch.
+   *
+   * The only place there is room to put a paw is OUTSIDE the silhouette,
+   * and the silhouette dump says that means x3-7 between y20 and y26.
+   * So the limb is authored reaching up and out into exactly that gap,
+   * emerging from behind the chest. The inner end stays buried in the
+   * torso, which is both correct occlusion and what keeps the composite
+   * a single connected component.
+   */
+  if (variant === LEG_V.RAISED && dir === 'S' && legId === 'legFL') {
+    fspan(26, 8, 10, SLOT.COAT_BASE, R.LEG);
+    fspan(25, 7, 9, SLOT.COAT_BASE, R.LEG);
+    fspan(24, 6, 8, SLOT.COAT_BASE, R.LEG);
+    fspan(23, 5, 7, SLOT.COAT_BASE, R.LEG);
+    // Blunt tip: three pixels tapering to three reads as a spike, and a
+    // cat batting at a toy should not look armed.
+    fspan(22, 4, 7, SLOT.FUR_LIGHT, R.LEG);
+    fspan(21, 3, 6, SLOT.FUR_LIGHT, R.LEG);
+    return cell;
+  }
+
   const [x0, x1, top, far, bottom = 30] = LEG_LAYOUT[dir][legId];
 
   const shaft = far ? SLOT.COAT_DARK : SLOT.COAT_BASE;
-  const paw = far ? SLOT.COAT_DARK : SLOT.FUR_LIGHT;
+  /**
+   * The foot is always a step lighter than the leg above it, far side
+   * included.
+   *
+   * A far paw used to be COAT_DARK like its shaft, so on a dark breed the
+   * whole lower half of the cat fused into one shadow and the walk read as a
+   * mass with a fringe rather than as four feet. Four readable points of
+   * contact is most of what makes a quadruped walk legible at 32px, and the
+   * far pair cannot contribute any if it has no value break at the ground.
+   */
+  const paw = far ? SLOT.COAT_BASE : SLOT.FUR_LIGHT;
 
   for (let y = top; y <= bottom - 2; y++) fspan(y, x0, x1, shaft, R.LEG);
   fspan(bottom - 1, x0 - 1, x1, paw, R.LEG);
@@ -1115,7 +1158,9 @@ const VARIANT_COUNT = {
   body: 3,   // rest, mid-breath, peak-breath
   head: 6,   // open, shut, squint, yawn, lick, ear-flick
   tail: 3,   // rest, swung out, swung in
-  legFL: 1, legFR: 1, legBL: 1, legBR: 1,
+  // Only the near-left foreleg has a second pose, and only front-on: it is
+  // the one the player sees, and the one `paw` needs.
+  legFL: 2, legFR: 1, legBL: 1, legBR: 1,
 };
 
 /**
@@ -1157,7 +1202,10 @@ function buildPartAtlas() {
 
     // Legs — four distinct cells, each authored at its own frame position.
     for (const legId of ['legFL', 'legFR', 'legBL', 'legBR']) {
-      atlas[legId][dir] = [fin(buildLeg(dir, legId))];
+      atlas[legId][dir] = [];
+      for (let v = 0; v < VARIANT_COUNT[legId]; v++) {
+        atlas[legId][dir].push(fin(buildLeg(dir, legId, v)));
+      }
     }
   }
 
@@ -1174,6 +1222,7 @@ module.exports = {
   PART_IDS,
   REGION,
   HEAD_V,
+  LEG_V,
   VARIANT_COUNT,
   buildPartAtlas,
   mirrorCell,

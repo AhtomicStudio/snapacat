@@ -6,7 +6,7 @@ window.SNAPACAT_PREVIEW = {
   SRC_FRAME: 32,
   SHEET_FRAME: 128,
   DIR_COLS: 7,
-  ACT_COLS: 26,
+  ACT_COLS: 14,
   DIR_ANIMATIONS: {
     idle: { frames: [0, 1, 2, 1], durations: [560, 130, 420, 130] },
     walk: { frames: [3, 4, 5, 6], durations: [180, 140, 180, 140] },
@@ -19,5 +19,8 @@ window.SNAPACAT_PREVIEW = {
     look: { frames: [16, 17, 18, 17, 16, 19, 16], durations: [680, 260, 180, 200, 320, 440, 700] },
     tailflick: { frames: [20, 21, 20, 22, 20], durations: [760, 320, 240, 320, 820] },
     sleep: { frames: [23, 24, 25, 24], durations: [1400, 220, 700, 220] },
+    eat: { frames: [26, 27, 28, 29, 28, 29, 28, 27, 26], durations: [520, 120, 260, 200, 220, 200, 260, 130, 620] },
+    paw: { frames: [30, 31, 32, 33, 32, 31, 30], durations: [620, 150, 130, 160, 130, 150, 660] },
+    sniff: { frames: [34, 35, 36, 35, 36, 35, 34], durations: [620, 140, 120, 120, 120, 160, 660] },
   },
 };

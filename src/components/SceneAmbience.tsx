@@ -21,6 +21,7 @@
  */
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
+import { SoftBlob } from './SoftBlob';
 
 
 // ---------------------------------------------------------------------------
@@ -498,24 +499,22 @@ export function LightPool({
         alignSelf: 'center',
         width: diameter,
         height: diameter * 0.75,
-        alignItems: 'center',
-        justifyContent: 'center',
         opacity,
       }}
     >
-      {[1, 0.66, 0.38].map((ring, i) => (
-        <View
-          key={i}
-          style={{
-            position: 'absolute',
-            width: diameter * ring,
-            height: diameter * 0.75 * ring,
-            borderRadius: diameter,
-            backgroundColor: colour,
-            opacity: 0.08 + i * 0.07,
-          }}
-        />
-      ))}
+      {/* Three rings put an 8% step at the outer edge, which on a flat
+          ground plane reads as a rim — and a pool of lamplight with a rim
+          around it is a painted circle. Same light, spread over enough
+          rings that no single edge is findable. */}
+      <SoftBlob
+        left={0}
+        top={0}
+        width={diameter}
+        height={diameter * 0.75}
+        colour={colour}
+        peak={0.34}
+        rings={8}
+      />
     </Animated.View>
   );
 }

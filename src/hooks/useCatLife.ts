@@ -28,13 +28,17 @@ import { AccessibilityInfo, Animated, Easing } from 'react-native';
 import type { ActAnimation, SpriteDirection } from '../assets/sprites';
 import {
   actDuration,
+  awayDuration,
   driftGeometry,
   driftTarget,
   facingFor,
+  interactionsFor,
+  napCycles,
   nextIdle,
   settleDuration,
   startupStagger,
   turnPath,
+  wandersOff,
   TURN_STEP_MS,
 } from '../utils/catBehaviour';
 
@@ -66,6 +70,13 @@ export interface CatLifeInput {
   sceneHeight: number;
   /** Dozing cats do not wander. */
   asleep: boolean;
+  /**
+   * The item this cat turned up for, if any. Decides which interactions
+   * it has available — a cat at a bowl eats, a cat at a toy bats at it.
+   */
+  atItemId?: string | null;
+  /** The cat's resting position across the world, 0…1. Used to pick an exit side. */
+  baseX?: number;
   /** Friend Hoods and unmeasured scenes hold still. */
   enabled: boolean;
 }
@@ -81,6 +92,15 @@ export interface CatLife {
   transform: Translate[];
   /** Paint order, which changes as a cat walks toward or away from the camera. */
   depth: number;
+  /**
+   * Fades a cat out when it wanders off and back in when it returns.
+   *
+   * A cat leaving had to be a fade rather than a walk clean off the plane:
+   * the world is a scroll container, and a sprite translated past its edge
+   * is at the mercy of whether that container clips. Fading at the edge
+   * looks the same to the player and depends on nothing.
+   */
+  opacity: Animated.Value;
 }
 
 /**
@@ -123,6 +143,8 @@ export function useCatLife({
   worldWidth,
   sceneHeight,
   asleep,
+  atItemId,
+  baseX = 0.5,
   enabled,
 }: CatLifeInput): CatLife {
   const reduceMotion = useReduceMotion();
@@ -133,6 +155,9 @@ export function useCatLife({
    * drives both axes, so they cannot drift apart under load.
    */
   const progress = useRef(new Animated.Value(0)).current;
+
+  /** 1 while the cat is here, 0 while it is off visiting somewhere else. */
+  const opacity = useRef(new Animated.Value(1)).current;
 
   /**
    * Seeded from `asleep` rather than hardcoded to idle.
@@ -181,6 +206,8 @@ export function useCatLife({
     let rested = 0;
     /** How long this cat is content to stay put before wandering again. */
     let patience = settleDuration(seed, slot, 0);
+    /** What this cat can do at the thing it came for. Empty on bare ground. */
+    const interactions = reduceMotion ? [] : interactionsFor(atItemId);
 
     const after = (ms: number, fn: () => void) => {
       timer = setTimeout(() => {
@@ -195,12 +222,20 @@ export function useCatLife({
        * reads as a frozen app rather than a considerate one — but it does not
        * groom, yawn, flick or glance, and it does not go anywhere.
        */
-      const animation = reduceMotion ? 'idle' : nextIdle(seed, slot, index, previousIdle);
+      const animation = reduceMotion
+        ? 'idle'
+        : nextIdle(seed, slot, index, previousIdle, interactions);
       previousIdle = animation;
       index += 1;
       setActivity({ kind: 'settled', animation });
 
-      const hold = actDuration(animation);
+      /**
+       * A nap is the one animation held for more than a single cycle.
+       * Looping sleep once reads as a cat shutting its eyes, not as a cat
+       * asleep — the difference is entirely duration.
+       */
+      const cycles = animation === 'sleep' ? napCycles(seed, slot, index) : 1;
+      const hold = actDuration(animation) * cycles;
       rested += hold;
 
       after(hold, () => {
@@ -213,7 +248,106 @@ export function useCatLife({
       });
     };
 
+    /**
+     * Off for a bit.
+     *
+     * A Hood whose cats only ever shuffle within their own small ellipse
+     * has no news in it: look away and look back and the same six cats are
+     * in the same six places. Leaving and returning is what makes the
+     * scene feel like it carried on without you.
+     *
+     * A cat that came for an item does not do this. It turned up for the
+     * bowl you put down, and wandering off would undercut the one piece of
+     * cause and effect the Hood has.
+     */
+    const startExcursion = () => {
+      const from = spot.current;
+      // Leave by the nearer edge, so the walk is short enough to watch.
+      const outward = baseX < 0.5 ? -0.06 : 1.06;
+      const to: Spot = {
+        dx: (outward - baseX) * worldWidth,
+        dy: from.dy,
+        depth: baseDepth,
+      };
+
+      const travelX = to.dx - from.dx;
+      const heading = facingFor(travelX, 0, facing);
+      // Roughly a steady walking pace rather than a fixed duration, or a
+      // cat near the middle sprints and one near the edge crawls.
+      const outMs = Math.min(9000, Math.max(1800, Math.abs(travelX) / 0.1));
+
+      legRef.current = { from, to };
+      setLeg({ from, to });
+      setDepth(baseDepth);
+
+      turn(heading, () => {
+        setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
+        progress.setValue(0);
+        Animated.timing(progress, {
+          toValue: 1,
+          duration: outMs,
+          easing: Easing.linear,
+          useNativeDriver: true,
+        }).start(({ finished }) => {
+          if (cancelled || !finished) return;
+          spot.current = to;
+          legRef.current = null;
+          setLeg(null);
+
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 260,
+            useNativeDriver: true,
+          }).start(() => {
+            if (cancelled) return;
+            // Out of sight. Come back somewhere between four and twelve
+            // seconds later, which is long enough to be missed.
+            const awayMs = awayDuration(seed, slot, index);
+            after(awayMs, () => {
+              // Reappear at the edge, then walk home.
+              const home: Spot = { ...AT_REST, depth: baseDepth };
+              legRef.current = { from: to, to: home };
+              setLeg({ from: to, to: home });
+              const backX = home.dx - to.dx;
+              facing = facingFor(backX, 0, 'S');
+              setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
+              Animated.timing(opacity, {
+                toValue: 1,
+                duration: 260,
+                useNativeDriver: true,
+              }).start();
+              progress.setValue(0);
+              Animated.timing(progress, {
+                toValue: 1,
+                duration: outMs,
+                easing: Easing.linear,
+                useNativeDriver: true,
+              }).start((back) => {
+                if (cancelled || !back.finished) return;
+                spot.current = home;
+                legRef.current = null;
+                setLeg(null);
+                setDepth(baseDepth);
+                rested = 0;
+                patience = settleDuration(seed, slot, index);
+                index += 1;
+                turn('S', beat);
+              });
+            });
+          });
+        });
+      });
+    };
+
     const startWalk = () => {
+      /**
+       * One excursion in eight is a trip off the plane, for cats with no
+       * item holding them in place.
+       */
+      if (interactions.length === 0 && wandersOff(seed, slot, index)) {
+        startExcursion();
+        return;
+      }
       const target = driftTarget(seed, slot, index);
       const from = spot.current;
 
@@ -385,5 +519,5 @@ export function useCatLife({
     ];
   }, [leg, progress]);
 
-  return { activity, transform, depth };
+  return { activity, transform, depth, opacity };
 }

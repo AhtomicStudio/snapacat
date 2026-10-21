@@ -60,6 +60,18 @@ function compose(dir, animName, frameIdx, atlas) {
     const dx = frameData.dx || 0;
     const dy = frameData.dy || 0;
     const variant = frameData.v || 0;
+    /**
+     * Horizontal offset that RAMPS down the cell: 0 at the top row,
+     * `swing` at the bottom. A leg pivots at the hip, so translating the
+     * whole column with dx slides the top of the leg out from under the
+     * body — four rigid pegs skating about beneath a static torso, which
+     * is precisely what the walk looked like.
+     *
+     * This is a shear, not a rotation. Every row is displaced by a WHOLE
+     * number of pixels, so nothing is resampled and the 3px shaft stays
+     * 3px — the reason the pipeline bans rotating parts does not apply.
+     */
+    const swing = frameData.swing || 0;
 
     const cells = atlas[partId][source];
     if (!cells) continue;
@@ -73,11 +85,15 @@ function compose(dir, animName, frameIdx, atlas) {
     const fx = root.x + anchor[0] + dx - ax;
     const fy = root.y + anchor[1] + dy - ay;
 
+    const span = cell.h > 1 ? cell.h - 1 : 1;
+
     for (let cy = 0; cy < cell.h; cy++) {
+      // Rounded per row, so the shear is a staircase of whole pixels.
+      const lean = swing === 0 ? 0 : Math.round((swing * cy) / span);
       for (let cx = 0; cx < cell.w; cx++) {
         const slot = cell.px[cy * cell.w + cx];
         if (slot === SLOT.EMPTY) continue;
-        const px = fx + cx;
+        const px = fx + cx + lean;
         const py = fy + cy;
         if (!inBounds(px, py)) continue;
         buf[idx(px, py)] = slot;

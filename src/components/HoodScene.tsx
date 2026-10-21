@@ -46,9 +46,12 @@ import {
   type ItemPlacement,
 } from '../config/scene';
 import { skyPalette, isDark, type TimeOfDay } from '../utils/timeOfDay';
-import { getDressing, type SceneDressing } from '../config/sceneDressing';
+import { getDressing, type SceneDressing, type GroundStyle } from '../config/sceneDressing';
 import { propLight, propMotion } from '../config/propMotion';
 import { Clouds, Fireflies, LightPool, Motes, StarField, moteStyleFor } from './SceneAmbience';
+import { font } from '../theme';
+import { mixHex, shade, tint, hashIndex } from '../utils/colour';
+import { SoftBlob } from './SoftBlob';
 
 // ---------------------------------------------------------------------------
 // Sizing
@@ -71,28 +74,6 @@ const PARALLAX_SKY = 0.20;
 /** The distant row — slower, so it slides behind the nearer one as you pan. */
 const PARALLAX_FAR = 0.38;
 const PARALLAX_BACKDROP = 0.55;
-
-// ---------------------------------------------------------------------------
-// Colour helpers
-// ---------------------------------------------------------------------------
-
-function parseHex(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
-  return [
-    parseInt(full.slice(0, 2), 16),
-    parseInt(full.slice(2, 4), 16),
-    parseInt(full.slice(4, 6), 16),
-  ];
-}
-
-/** Linear blend between two hex colours. Used to fake a gradient in bands. */
-function mixHex(a: string, b: string, t: number): string {
-  const [ar, ag, ab] = parseHex(a);
-  const [br, bg, bb] = parseHex(b);
-  const to2 = (n: number) => Math.round(n).toString(16).padStart(2, '0');
-  return `#${to2(ar + (br - ar) * t)}${to2(ag + (bg - ag) * t)}${to2(ab + (bb - ab) * t)}`;
-}
 
 /**
  * Bands used to approximate the sky gradient.
@@ -395,63 +376,223 @@ function MidWall({
         ))}
 
       {wallStyle === 'planks' &&
-        Array.from({ length: Math.ceil(width / 22) + 1 }, (_, col) => (
-          <View
-            key={col}
-            style={{
-              position: 'absolute',
-              left: col * 22,
-              top: 0,
-              width: 1.5,
-              height: wallHeight,
-              backgroundColor: seam,
-              opacity: 0.7,
-            }}
-          />
-        ))}
+        // Seam lines alone make a fence look printed. Timber is cut from
+        // different boards and weathers unevenly, so a share of the planks
+        // carry their own tone, and a few carry grain or a knot. Only the
+        // selected planks get extra views, the way the brick wall does.
+        Array.from({ length: Math.ceil(width / 22) + 1 }, (_, col) => {
+          const v = hashIndex(col, 11);
+          return (
+            <React.Fragment key={col}>
+              {v > 0.28 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 1.5,
+                    top: 0,
+                    width: 20.5,
+                    height: wallHeight,
+                    backgroundColor: v > 0.64 ? tint(wall, 0.5) : shade(wall, 0.5),
+                    opacity: 0.05 + v * 0.07,
+                  }}
+                />
+              )}
+              {v > 0.5 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 5 + v * 9,
+                    top: wallHeight * (0.1 + v * 0.25),
+                    width: 1,
+                    height: wallHeight * 0.34,
+                    backgroundColor: shade(wall, 0.5),
+                    opacity: 0.22,
+                  }}
+                />
+              )}
+              {v > 0.84 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 8,
+                    top: wallHeight * (0.3 + v * 0.35),
+                    width: 5,
+                    height: 4,
+                    borderRadius: 3,
+                    backgroundColor: shade(wall, 0.55),
+                    opacity: 0.34,
+                  }}
+                />
+              )}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: col * 22,
+                  top: 0,
+                  width: 1.5,
+                  height: wallHeight,
+                  backgroundColor: seam,
+                  opacity: 0.7,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
 
       {wallStyle === 'tile' &&
         Array.from({ length: Math.ceil(wallHeight / 20) }, (_, row) => (
           <View key={row} style={{ position: 'absolute', left: 0, right: 0, top: row * 20 }}>
             <View style={{ height: 1.5, backgroundColor: seam, opacity: 0.6 }} />
-            {Array.from({ length: Math.ceil(width / 20) + 1 }, (_, col) => (
-              <View
-                key={col}
-                style={{
-                  position: 'absolute',
-                  left: col * 20,
-                  top: 1,
-                  width: 1.5,
-                  height: 19,
-                  backgroundColor: seam,
-                  opacity: 0.5,
-                }}
-              />
-            ))}
+            {Array.from({ length: Math.ceil(width / 20) + 1 }, (_, col) => {
+              /**
+               * Glazed tile is the one surface where UNEVENNESS is the whole
+               * character: no two fire the same, and the glaze throws a
+               * highlight that moves tile to tile. A perfect grid of one
+               * colour reads as graph paper, which is what this was.
+               */
+              const v = hashIndex(row * 37 + col, 5);
+              return (
+                <React.Fragment key={col}>
+                  {v > 0.3 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 20 + 1.5,
+                        top: 1.5,
+                        width: 18.5,
+                        height: 18.5,
+                        backgroundColor: v > 0.65 ? tint(wall, 0.6) : shade(wall, 0.4),
+                        opacity: 0.04 + v * 0.07,
+                      }}
+                    />
+                  )}
+                  {v > 0.72 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 20 + 4,
+                        top: 3,
+                        width: 3.5,
+                        height: 15,
+                        backgroundColor: '#FFFFFF',
+                        opacity: 0.11,
+                        transform: [{ rotate: '24deg' }],
+                      }}
+                    />
+                  )}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: col * 20,
+                      top: 1,
+                      width: 1.5,
+                      height: 19,
+                      backgroundColor: seam,
+                      opacity: 0.5,
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
           </View>
         ))}
 
       {wallStyle === 'concrete' && (
-        <View style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 2, backgroundColor: seam, opacity: 0.5 }} />
+        <>
+          {/* Concrete is cast in panels, and no two cure the same colour.
+              One scored line across a flat slab was the entire texture here,
+              which is why the rooftop parapet read as grey card. The streaks
+              are rain washing dirt down from the coping — the thing that
+              actually dates a concrete wall. */}
+          {Array.from({ length: Math.ceil(width / 86) + 1 }, (_, i) => {
+            const v = hashIndex(i, 17);
+            return (
+              <React.Fragment key={i}>
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: i * 86,
+                    top: 0,
+                    width: 86,
+                    height: wallHeight,
+                    backgroundColor: v > 0.5 ? tint(wall, 0.5) : shade(wall, 0.45),
+                    opacity: 0.03 + v * 0.06,
+                  }}
+                />
+                {v > 0.42 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: i * 86 + 12 + v * 46,
+                      top: 0,
+                      width: 5 + v * 11,
+                      height: wallHeight * (0.35 + v * 0.55),
+                      backgroundColor: shade(wall, 0.6),
+                      opacity: 0.07,
+                    }}
+                  />
+                )}
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: i * 86,
+                    top: 0,
+                    width: 2,
+                    height: wallHeight,
+                    backgroundColor: seam,
+                    opacity: 0.4,
+                  }}
+                />
+              </React.Fragment>
+            );
+          })}
+          <View style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 2, backgroundColor: seam, opacity: 0.5 }} />
+        </>
       )}
 
-      {wallStyle === 'hedge' &&
-        // Lumpy top edge, drawn as overlapping discs, so a hedge doesn't read
-        // as a painted fence.
-        Array.from({ length: Math.ceil(width / 18) + 1 }, (_, i) => (
-          <View
-            key={i}
-            style={{
-              position: 'absolute',
-              left: i * 18 - 6,
-              top: -8 + (i % 3) * 3,
-              width: 24,
-              height: 22,
-              borderRadius: 12,
-              backgroundColor: wall,
-            }}
-          />
-        ))}
+      {wallStyle === 'hedge' && (
+        <>
+          {/* The lumpy top edge was doing all the work, and below it the
+              hedge was a flat green rectangle. Foliage is clumps catching
+              light at different angles; without that it is a painted fence
+              with a bumpy top. Forty clumps is where it stops reading as
+              scattered dots and starts reading as a mass. */}
+          {Array.from({ length: 40 }, (_, i) => {
+            const u = hashIndex(i, 23);
+            const v = hashIndex(i, 29);
+            return (
+              <View
+                key={`c${i}`}
+                style={{
+                  position: 'absolute',
+                  left: u * width - 10,
+                  top: v * wallHeight - 8,
+                  width: 16 + v * 14,
+                  height: 13 + u * 11,
+                  borderRadius: 999,
+                  backgroundColor: v > 0.5 ? tint(wall, 0.3) : shade(wall, 0.35),
+                  opacity: 0.3,
+                }}
+              />
+            );
+          })}
+          {/* Lumpy top edge, drawn as overlapping discs. */}
+          {Array.from({ length: Math.ceil(width / 18) + 1 }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                left: i * 18 - 6,
+                top: -8 + (i % 3) * 3,
+                width: 24,
+                height: 22,
+                borderRadius: 12,
+                backgroundColor: i % 3 === 1 ? tint(wall, 0.16) : wall,
+              }}
+            />
+          ))}
+        </>
+      )}
 
       {/* Coping along the top and a grimy band at the base — the two cues that
           make a flat rectangle read as a built surface. */}
@@ -497,12 +638,17 @@ function GroundDressing({
   width,
   height,
   tint,
+  base,
+  style,
   dark,
 }: {
   seed: number;
   width: number;
   height: number;
   tint: string;
+  /** Ground base colour, so blades can be lit against it. */
+  base: string;
+  style: GroundStyle;
   dark: boolean;
 }) {
   const bits = useMemo(() => {
@@ -536,29 +682,28 @@ function GroundDressing({
    */
   const patches = useMemo(() => {
     const out: { x: number; y: number; w: number; h: number; o: number; light: boolean }[] = [];
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 10; i++) {
       const r1 = ((seed ^ Math.imul(i + 31, 0x2545f491)) >>> 8) / 0xffffff;
       const r2 = ((seed ^ Math.imul(i + 47, 0x9e3779b9)) >>> 8) / 0xffffff;
       const r3 = ((seed ^ Math.imul(i + 59, 0x7feb352d)) >>> 8) / 0xffffff;
       /**
-       * Very large and very faint, and that combination is the whole point.
+       * Very large and very faint, and built out of rings.
        *
-       * The first attempt used patches about a fifth of the world wide at 2-7%
-       * opacity, which rendered as a field of distinct grey discs — worse than
-       * the flat colour it replaced, because a visible hard-edged circle is a
-       * shape the eye names. There is no blur available without a dependency,
-       * so the edge has to be hidden by scale instead: at a third to four
-       * fifths of the world across, most of each patch's boundary is off the
-       * viewport at any pan position, and what remains is a gradient too
-       * gradual to resolve.
+       * Two attempts got this wrong. Small discs at 2-7% rendered as a field
+       * of grey coins — a hard-edged circle is a shape the eye names. Making
+       * them huge so the edge leaves the viewport only looked better: a
+       * rounded View is a flat fill, so an off-screen edge gives a uniform
+       * tint over everything, which is a different flat colour rather than
+       * variation. SoftBlob stacks rings to build the falloff a single View
+       * cannot have.
        */
-      const w = width * (0.34 + r3 * 0.46);
+      const w = width * (0.30 + r3 * 0.34);
       out.push({
         x: r1 * width - w / 2,
         y: r2 * height - height * 0.25,
         w,
         h: height * (0.55 + r3 * 0.5),
-        o: 0.012 + r3 * 0.022,
+        o: 0.030 + r3 * 0.045,
         light: r1 > 0.5,
       });
     }
@@ -585,25 +730,75 @@ function GroundDressing({
     return out;
   }, [seed, width, height]);
 
+  /**
+   * Grass, for the one environment that has any.
+   *
+   * A lawn is not a green rectangle with flecks on it — what reads as
+   * grass is thousands of near-vertical strokes, and the eye needs only a
+   * few dozen clumps of them to accept the rest. Each tuft fans three
+   * blades so it has a silhouette; a single stroke reads as a scratch.
+   * Nearer tufts are taller, on the same depth curve as the grit.
+   */
+  const tufts = useMemo(() => {
+    if (style !== 'grass') return [];
+    const out: { x: number; y: number; h: number; light: boolean }[] = [];
+    for (let i = 0; i < 72; i++) {
+      const r1 = ((seed ^ Math.imul(i + 97, 0x27d4eb2f)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 113, 0x165667b1)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 127, 0xd3a2646c)) >>> 8) / 0xffffff;
+      const d = r2 * r2;
+      out.push({ x: r1 * width, y: d * height, h: 5 + d * 11 + r3 * 4, light: r3 > 0.5 });
+    }
+    return out;
+  }, [seed, width, height, style]);
+
+  const blade = mixHex(base, '#FFF8EE', 0.26);
+
+  /**
+   * Loose ballast on the roof deck.
+   *
+   * The first attempt made the roof out of stones alone, and it could not
+   * work: the world is three viewports across, so even 150 of them come
+   * out one per few thousand square points — the eye reads that as dust
+   * on a slab, not as a surface made of stone. Covering it properly would
+   * take thousands of views.
+   *
+   * So the surface is the FELT below, which is a handful of long strips,
+   * and the stones are scattered on top as the loose ballast that has
+   * drifted across it. Few things, doing what few things can do.
+   */
+  const stones = useMemo(() => {
+    if (style !== 'roofdeck') return [];
+    const out: { x: number; y: number; r: number; light: boolean }[] = [];
+    for (let i = 0; i < 70; i++) {
+      const r1 = ((seed ^ Math.imul(i + 137, 0x2c1b3c6d)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 149, 0x297a2d39)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 163, 0x1b56c4e9)) >>> 8) / 0xffffff;
+      const d = r2 * r2;
+      out.push({ x: r1 * width, y: d * height, r: 1.1 + d * 1.7 + r3 * 1.2, light: r3 > 0.45 });
+    }
+    return out;
+  }, [seed, width, height, style]);
+
+  const stoneLight = mixHex(base, '#FFF8EE', 0.34);
+  const stoneDark = mixHex(base, '#2A211A', 0.30);
+
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
       {/* Low frequency first, so grit and cracks sit on top of the mottling. */}
       {patches.map((p, i) => (
-        <View
+        <SoftBlob
           key={`p${i}`}
-          style={{
-            position: 'absolute',
-            left: p.x,
-            top: p.y,
-            width: p.w,
-            height: p.h,
-            borderRadius: p.w / 2,
-            backgroundColor: p.light ? '#FFFFFF' : '#000000',
-            opacity: dark ? p.o * 0.65 : p.o,
-          }}
+          left={p.x}
+          top={p.y}
+          width={p.w}
+          height={p.h}
+          colour={p.light ? '#FFFFFF' : '#000000'}
+          peak={dark ? p.o * 0.65 : p.o}
+          rings={6}
         />
       ))}
-      {seams.map((s, i) => (
+      {style === 'asphalt' && seams.map((s, i) => (
         <View
           key={`s${i}`}
           style={{
@@ -617,6 +812,80 @@ function GroundDressing({
             transform: [{ rotate: s.tilt }],
           }}
         />
+      ))}
+      {style === 'roofdeck' &&
+        /**
+         * Roofing felt, laid in overlapping strips.
+         *
+         * The lap lines run across the roof, and because they recede they
+         * bunch toward the horizon — that spacing IS the perspective cue,
+         * and it is what says "flat roof" before any other detail lands.
+         * Each strip is a shade off its neighbour, the way rolls off
+         * different batches never quite match.
+         */
+        Array.from({ length: 9 }, (_, i) => {
+          const y = height * Math.pow(i / 9, 1.7);
+          const next = height * Math.pow((i + 1) / 9, 1.7);
+          return (
+            <React.Fragment key={`felt${i}`}>
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: y,
+                  width,
+                  height: next - y,
+                  backgroundColor: i % 2 ? '#FFFFFF' : '#000000',
+                  opacity: 0.022,
+                }}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: y,
+                  width,
+                  height: 1.5,
+                  backgroundColor: '#000000',
+                  opacity: dark ? 0.12 : 0.16,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
+      {stones.map((st, i) => (
+        <View
+          key={`g${i}`}
+          style={{
+            position: 'absolute',
+            left: st.x,
+            top: st.y,
+            width: st.r * 2,
+            height: st.r * 1.6,
+            borderRadius: 999,
+            backgroundColor: st.light ? stoneLight : stoneDark,
+            opacity: dark ? 0.38 : 0.55,
+          }}
+        />
+      ))}
+      {tufts.map((t, i) => (
+        <View key={`t${i}`} style={{ position: 'absolute', left: t.x, top: t.y }}>
+          {[-15, 0, 15].map((deg, j) => (
+            <View
+              key={j}
+              style={{
+                position: 'absolute',
+                left: j * 2.5,
+                bottom: 0,
+                width: 1.5,
+                height: j === 1 ? t.h : t.h * 0.72,
+                backgroundColor: t.light ? blade : tint,
+                opacity: dark ? 0.26 : 0.4,
+                transform: [{ rotate: `${deg}deg` }],
+              }}
+            />
+          ))}
+        </View>
       ))}
       {bits.map((b, i) => (
         <View
@@ -706,13 +975,16 @@ function SceneCat({
   alive: boolean;
   onPress: () => void;
 }) {
-  const { activity, transform, depth } = useCatLife({
+  const { activity, transform, depth, opacity } = useCatLife({
     seed,
     slot: placement.slot,
     baseDepth: placement.z,
+    baseX: placement.x,
     worldWidth,
     sceneHeight,
     asleep,
+    // What it came for, which decides what it does while it is here.
+    atItemId: placement.atItemId,
     enabled: alive,
   });
 
@@ -735,6 +1007,7 @@ function SceneCat({
         height: size,
         zIndex: Math.round(depth * 1000),
         transform,
+        opacity,
       }}
     >
       <Touchable
@@ -936,8 +1209,12 @@ function SceneItem({
  * The sun or moon, with the glow it throws into the sky around it.
  *
  * The glow is what stops it reading as a sticker. A flat disc on a banded
- * gradient is the single most obviously-drawn thing in a sky; two faint rings
- * behind it cost nothing and make it sit in the air instead of on top of it.
+ * gradient is the single most obviously-drawn thing in a sky.
+ *
+ * This had two rings behind it, which was the right idea and not enough of
+ * it: the outer ring stepped from nothing to 7% in one go, so the halo had
+ * a rim. A halo with a rim is a drawn circle. SoftBlob spreads the same
+ * light over enough rings that there is no step to find.
  */
 function Luminary({ dark, left, top }: { dark: boolean; left: number; top: number }) {
   const size = dark ? 38 : 52;
@@ -945,21 +1222,15 @@ function Luminary({ dark, left, top }: { dark: boolean; left: number; top: numbe
 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left, top }}>
-      {[2.4, 1.6].map((ring, i) => (
-        <View
-          key={ring}
-          style={{
-            position: 'absolute',
-            left: -(size * (ring - 1)) / 2,
-            top: -(size * (ring - 1)) / 2,
-            width: size * ring,
-            height: size * ring,
-            borderRadius: size * ring,
-            backgroundColor: colour,
-            opacity: dark ? 0.07 - i * 0.02 : 0.13 - i * 0.04,
-          }}
-        />
-      ))}
+      <SoftBlob
+        left={-(size * 1.7) / 2}
+        top={-(size * 1.7) / 2}
+        width={size * 2.7}
+        height={size * 2.7}
+        colour={colour}
+        peak={dark ? 0.16 : 0.26}
+        rings={8}
+      />
       <View
         style={{
           width: size,
@@ -970,6 +1241,77 @@ function Luminary({ dark, left, top }: { dark: boolean; left: number; top: numbe
         }}
       />
     </View>
+  );
+}
+
+/**
+ * A vacant anchor, offered.
+ *
+ * Deliberately the same dashed warm ring the apartment uses for its empty
+ * slots: the two screens are the same game, and a player who has learnt
+ * what a dashed ring means indoors should not have to learn it again
+ * outside. It breathes, because a static dotted circle on a busy ground
+ * plane reads as scenery rather than as something you can press.
+ */
+function SceneSpot({
+  size, left, top, dark, onPress,
+}: {
+  size: number; left: number; top: number; dark: boolean; onPress: () => void;
+}) {
+  const pulse = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.6, duration: 1100, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulse]);
+
+  // Spots scale with depth like everything else on the plane, but a
+  // target still has to be hittable: the ring shrinks, the touch area
+  // does not go below a thumb.
+  const ring = Math.max(26, size * 0.62);
+  const pad = Math.max(0, (44 - ring) / 2);
+
+  return (
+    <Touchable
+      onPress={onPress}
+      hitSlop={{ top: pad, bottom: pad, left: pad, right: pad }}
+      scaleTo={0.9}
+      style={{ position: 'absolute', left, top: top + size * 0.42 }}
+    >
+      <Animated.View
+        style={{
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: 2.5,
+          borderStyle: 'dashed',
+          // Asphalt is a mid grey and the first pass put a 40%-opacity warm
+          // ring on it, which disappeared into the ground. An invitation has
+          // to out-contrast what it sits on.
+          borderColor: dark ? 'rgba(255,255,255,0.8)' : '#FF7A38',
+          backgroundColor: dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,240,230,0.72)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pulse,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: Math.max(13, ring * 0.42),
+            fontFamily: font.medium,
+            color: dark ? 'rgba(255,255,255,0.85)' : '#E67035',
+          }}
+        >
+          +
+        </Text>
+      </Animated.View>
+    </Touchable>
   );
 }
 
@@ -1000,6 +1342,10 @@ export interface HoodSceneProps {
   onPressCat?: (slot: number, spriteId: string | undefined, atItemId: string | null) => void;
   /** Tapping a placed item picks it back up. */
   onPressItem?: (itemId: string) => void;
+  /** Tapping a vacant spot on the plane — opens the item picker. */
+  onPressSpot?: (anchorId: string) => void;
+  /** anchorId → itemId for items the player placed at a chosen spot. */
+  itemAnchors?: Record<string, string>;
   /** Read-only friend Hoods suppress interaction. */
   readOnly?: boolean;
 }
@@ -1015,6 +1361,8 @@ export function HoodScene({
   envId,
   onPressCat,
   onPressItem,
+  onPressSpot,
+  itemAnchors,
   readOnly = false,
 }: HoodSceneProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -1032,8 +1380,8 @@ export function HoodScene({
   const catCount = Math.max(0, Math.min(MAX_HOOD_CATS, expectedCats));
 
   const layout = useMemo(
-    () => layoutScene({ hoodId, placedItems, catCount: spritesLoading ? 0 : catCount }),
-    [hoodId, placedItems, catCount, spritesLoading],
+    () => layoutScene({ hoodId, placedItems, catCount: spritesLoading ? 0 : catCount, pinned: itemAnchors }),
+    [hoodId, placedItems, catCount, spritesLoading, itemAnchors],
   );
 
   const actors = useMemo(() => paintOrder(layout), [layout]);
@@ -1220,6 +1568,8 @@ export function HoodScene({
                   width={worldW}
                   height={height - horizonY}
                   tint={dressing.speckle}
+                  base={dressing.ground}
+                  style={dressing.groundStyle}
                   dark={dark}
                 />
                 {/* Kerb where the ground meets the wall, plus the shadow the
@@ -1260,6 +1610,24 @@ export function HoodScene({
               {dark && dressing.wallStyle !== 'none' && (
                 <Fireflies width={worldW} height={height * 0.72} seed={seed} />
               )}
+
+              {/* Vacant spots, under the actors so a cat or an item
+                  always paints over the invitation rather than behind
+                  it. Hidden in a friend's Hood, which is a photograph. */}
+              {!readOnly && onPressSpot &&
+                layout.spots.map((spot) => {
+                  const size = ACTOR_BASE_SIZE * spot.scale;
+                  return (
+                    <SceneSpot
+                      key={spot.key}
+                      size={size}
+                      left={spot.x * worldW - size / 2}
+                      top={spot.y * height - size}
+                      dark={dark}
+                      onPress={() => onPressSpot(spot.anchorId)}
+                    />
+                  );
+                })}
 
               {/* Actors, back to front */}
               {actors.map((actor) => {

@@ -302,6 +302,12 @@ export interface HoodHomeScreenProps {
 // Screen
 // ---------------------------------------------------------------------------
 
+/**
+ * Prefix marking a picker opened from open ground rather than a named slot.
+ * The anchor id follows it, so the item lands where the player pointed.
+ */
+const HOOD_SPOT_PREFIX = 'hood:';
+
 export function HoodHomeScreen({
   userId,
   username,
@@ -326,6 +332,14 @@ export function HoodHomeScreen({
   const [showShop, setShowShop] = useState(false);
   const [showSwitcher, setShowSwitcher] = useState(false);
   const [tappedCat, setTappedCat] = useState<{ spriteId?: string; atItemId: string | null } | null>(null);
+  /**
+   * Which spot the item picker is open for.
+   *
+   * The apartment uses a real slot id. The Hood has no slots, so tapping
+   * one of its vacant spots stores `hood:<anchorId>` here — one sheet
+   * serves both screens, and the anchor rides along so the item lands
+   * where the player actually pointed.
+   */
   const [pickerSlotId, setPickerSlotId] = useState<string | null>(null);
 
   const activeTheme = useMemo(
@@ -406,6 +420,8 @@ export function HoodHomeScreen({
     [effectiveItems],
   );
 
+  const pickerSpotIsHood = pickerSlotId?.startsWith(HOOD_SPOT_PREFIX) ?? false;
+
   // ── Mutations ────────────────────────────────────────────────────────────
   const writePlacements = useCallback(
     (next: Record<string, string>) => {
@@ -456,10 +472,26 @@ export function HoodHomeScreen({
 
   const handlePlaceInSlot = useCallback(
     (slotId: string, itemId: string) => {
+      if (slotId.startsWith(HOOD_SPOT_PREFIX)) {
+        const anchorId = slotId.slice(HOOD_SPOT_PREFIX.length);
+        const nextItems = addItem(hood, itemId);
+        // addItem enforces the per-item and total caps, and returns the
+        // list unchanged when it refuses. Pinning an anchor to an item
+        // that never went down would strand the spot.
+        if (nextItems !== hood.placed_items) {
+          onUpdateHood(hoodId, {
+            ...hood,
+            placed_items: nextItems,
+            item_placements: { ...(hood.item_placements ?? {}), [anchorId]: itemId },
+          });
+        }
+        setPickerSlotId(null);
+        return;
+      }
       writePlacements({ ...placements, [slotId]: itemId });
       setPickerSlotId(null);
     },
-    [placements, writePlacements],
+    [hood, hoodId, onUpdateHood, placements, writePlacements],
   );
 
   const handleSelectTheme = useCallback(
@@ -499,10 +531,11 @@ export function HoodHomeScreen({
 
       {/* ── The scene ────────────────────────────────────────────────────── */}
       {isApartment ? (
-        // Slot-based interiors still use the fixed-size room diorama. Converting
-        // it to the full-bleed plane is a separate job — its furniture is laid
-        // out in a mix of percentages and fixed points, so stretching it warps.
-        <View style={{ flex: 1, backgroundColor: palette.mid, justifyContent: 'center' }}>
+        // Full-bleed and pannable now, like every other environment. The
+        // furniture is still laid out in percentages that assume a
+        // single-screen room — which is why it is wrapped in a viewport-wide
+        // box inside the canvas rather than stretched across the wider world.
+        <View style={{ flex: 1, backgroundColor: palette.mid }}>
           <ApartmentCanvas
             placements={placements}
             expectedCats={spawnResult.expectedCats}
@@ -529,6 +562,8 @@ export function HoodHomeScreen({
           envId={activeEnv.env_id}
           onPressCat={(_slot, spriteId, atItemId) => setTappedCat({ spriteId, atItemId })}
           onPressItem={handleRemove}
+          onPressSpot={(anchorId) => setPickerSlotId(`${HOOD_SPOT_PREFIX}${anchorId}`)}
+          itemAnchors={hood.item_placements ?? undefined}
         />
       )}
 
@@ -769,13 +804,16 @@ export function HoodHomeScreen({
               }}
             />
             <Text style={{ fontSize: 18, fontFamily: font.bold, color: INK }}>
-              {pickerSlotId ? getSlotById(pickerSlotId)?.label ?? '' : ''}
+              {pickerSpotIsHood ? 'Put something here' : pickerSlotId ? getSlotById(pickerSlotId)?.label ?? '' : ''}
             </Text>
             <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: 14 }}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingBottom: 6 }}>
                 {pickerSlotId &&
                   PLACEABLE_ITEMS.filter((i) =>
-                    (getSlotById(pickerSlotId)?.accepts ?? []).includes(i.category),
+                    // Open ground takes anything; a named slot does not.
+                    pickerSpotIsHood
+                      ? true
+                      : (getSlotById(pickerSlotId)?.accepts ?? []).includes(i.category),
                   ).map((def) => {
                     const unlocked = isItemUnlocked(progression, def.item_id);
                     const full = !canAddItem({ placed_items: effectiveItems }, def.item_id);

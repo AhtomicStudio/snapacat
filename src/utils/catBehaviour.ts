@@ -26,6 +26,8 @@
  */
 import { ACT_ANIMATIONS, DIRECTIONS, type ActAnimation, type SpriteDirection } from '../assets/sprites';
 import { planeY } from '../config/scene';
+import { PLACEABLE_ITEMS } from './spawnCalculator';
+import type { ItemCategory } from '../types';
 
 // ---------------------------------------------------------------------------
 // Facing
@@ -265,6 +267,14 @@ const REPERTOIRE: ReadonlyArray<{ animation: ActAnimation; weight: number }> = [
   { animation: 'groom', weight: 17 },
   { animation: 'yawn', weight: 13 },
   { animation: 'tailflick', weight: 8 },
+  /**
+   * A daytime nap. Low weight and long hold, which is the opposite of
+   * every other entry here and deliberate: picked rarely, it still ends up
+   * being a decent share of what you SEE, because one nap runs for several
+   * cycles where a blink runs for one. A Hood where nobody ever settles
+   * for more than two seconds is a Hood of fidgeting.
+   */
+  { animation: 'sleep', weight: 5 },
 ];
 
 const TOTAL_WEIGHT = REPERTOIRE.reduce((sum, entry) => sum + entry.weight, 0);
@@ -282,7 +292,19 @@ export function nextIdle(
   slot: number,
   index: number,
   previous?: ActAnimation,
+  interactions: readonly ActAnimation[] = [],
 ): ActAnimation {
+  /**
+   * A cat at an item plays that item's repertoire most of the time, and
+   * the general one the rest. Drawn from its own noise salt so adding this
+   * did not reshuffle every existing cat's schedule.
+   */
+  if (interactions.length > 0 && noise(seed, slot * 977 + index * 31) < INTERACTION_SHARE) {
+    const at = Math.floor(noise(seed, slot * 613 + index * 47) * interactions.length);
+    const pick = interactions[Math.min(at, interactions.length - 1)]!;
+    if (pick !== previous) return pick;
+  }
+
   const roll = noise(seed, slot * 2089 + index * 59) * TOTAL_WEIGHT;
 
   let cursor = 0;
@@ -294,6 +316,73 @@ export function nextIdle(
     }
   }
   return 'idle';
+}
+
+// ---------------------------------------------------------------------------
+// Object interactions
+// ---------------------------------------------------------------------------
+
+/**
+ * What a cat does at each kind of thing you can put down.
+ *
+ * Before this, a cat that had come for a food bowl and a cat standing on
+ * bare asphalt did exactly the same things, which quietly undercut the
+ * whole loop: the reward for placing an item was that a cat stood near it.
+ * Now the item changes the performance.
+ *
+ * Three each, and they are not all new art — `groom`, `look` and
+ * `tailflick` already existed and are perfectly good reactions when they
+ * are chosen BECAUSE of what the cat is next to. A cat grooming after a
+ * meal is a cat that just ate.
+ */
+export const INTERACTIONS: Record<ItemCategory, readonly ActAnimation[]> = {
+  food: ['eat', 'sniff', 'groom'],
+  toy: ['paw', 'sniff', 'look'],
+  shelter: ['sleep', 'groom', 'sniff'],
+  decor: ['look', 'sniff', 'tailflick'],
+};
+
+/** The interaction set for whatever a cat is standing at, if anything. */
+export function interactionsFor(itemId: string | null | undefined): readonly ActAnimation[] {
+  if (!itemId) return [];
+  const def = PLACEABLE_ITEMS.find((i) => i.item_id === itemId);
+  return def ? INTERACTIONS[def.category] : [];
+}
+
+/**
+ * How much of a cat's time at an item is spent on that item.
+ *
+ * Not 1. A cat that only ever ate would be a vending machine, and the
+ * general repertoire is what keeps it a cat; this is the share where the
+ * item wins.
+ */
+const INTERACTION_SHARE = 0.55;
+
+/**
+ * How many cycles a nap runs for.
+ *
+ * The sleep loop is about two and a half seconds, so three to seven cycles
+ * is roughly eight to eighteen seconds of a cat being asleep. Long enough
+ * to read as a nap rather than a long blink, short enough that a player
+ * watching one cat does not conclude it is broken.
+ */
+/**
+ * Whether this excursion is a trip off the plane rather than a short drift.
+ *
+ * One in eight. Higher and the Hood empties out while you are looking at it,
+ * which reads as cats fleeing rather than as a neighbourhood.
+ */
+export function wandersOff(seed: number, slot: number, index: number): boolean {
+  return noise(seed, slot * 1811 + index * 97) < 0.125;
+}
+
+/** How long a cat stays away, in ms. Long enough to be missed. */
+export function awayDuration(seed: number, slot: number, index: number): number {
+  return 4000 + Math.floor(noise(seed, slot * 2273 + index * 101) * 8000);
+}
+
+export function napCycles(seed: number, slot: number, index: number): number {
+  return 3 + Math.floor(noise(seed, slot * 1511 + index * 83) * 5);
 }
 
 /**

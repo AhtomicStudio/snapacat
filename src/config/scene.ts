@@ -248,9 +248,32 @@ export interface CatPlacement extends Placement {
   atItemId: string | null;
 }
 
+/** A vacant anchor offered to the player as somewhere to put something. */
+export interface SpotPlacement extends Placement {
+  anchorId: string;
+}
+
+/**
+ * How many vacant anchors to offer at once.
+ *
+ * The plane carries seventeen, and showing every bare one turns the Hood
+ * into a form to fill in. Five is enough that panning always has one in
+ * view without the scene reading as a grid of sockets.
+ */
+export const MAX_SPOTS = 5;
+
+/**
+ * Nearest depth a spot may sit at. Anything further is a handful of
+ * pixels on screen — too small to aim at, and an invitation you cannot
+ * hit is worse than no invitation.
+ */
+const SPOT_MIN_DEPTH = 0.3;
+
 export interface SceneLayout {
   items: ItemPlacement[];
   cats: CatPlacement[];
+  /** Vacant anchors the player can tap to place something. */
+  spots: SpotPlacement[];
   /** Items that were placed but had no anchor left to draw them at. */
   hiddenItemCount: number;
 }
@@ -272,6 +295,16 @@ export interface LayoutInput {
   placedItems: string[];
   /** How many cats are visiting. Callers must respect MAX_HOOD_CATS. */
   catCount: number;
+  /**
+   * Items the player put at a particular anchor, as anchorId → itemId.
+   *
+   * Without this the scene assigns items to anchors in placement order,
+   * which is fine when the player never chose a place — but the moment
+   * they tap a specific vacant spot, "somewhere" is the wrong answer. A
+   * pin that names an item no longer in `placedItems` is ignored, so the
+   * map can go stale without stranding an anchor.
+   */
+  pinned?: Record<string, string>;
 }
 
 /**
@@ -282,32 +315,63 @@ export interface LayoutInput {
  * are the ones that look occupied — and only spread to bare anchors once every
  * item has a visitor.
  */
-export function layoutScene({ hoodId, placedItems, catCount }: LayoutInput): SceneLayout {
+export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInput): SceneLayout {
   const seed = hashSeed(hoodId);
   const anchors = buildAnchors(seed);
 
-  const drawnItems = placedItems.slice(0, anchors.length);
-  const items: ItemPlacement[] = drawnItems.map((itemId, i) => {
-    const anchor = anchors[i]!;
-    return {
-      key: `item_${anchor.id}_${i}`,
+  /**
+   * Pinned items claim their anchor first; everything else fills in around
+   * them in placement order. With no pins this assigns item i to anchor i,
+   * exactly as it always did.
+   */
+  const pool = placedItems.slice();
+  const taken = new Map<string, string>();
+
+  if (pinned) {
+    for (const anchor of anchors) {
+      const want = pinned[anchor.id];
+      if (!want) continue;
+      // Consume one instance: the same item can be stacked at two anchors.
+      const at = pool.indexOf(want);
+      if (at < 0) continue;
+      pool.splice(at, 1);
+      taken.set(anchor.id, want);
+    }
+  }
+
+  let nextItem = 0;
+  for (const anchor of anchors) {
+    if (nextItem >= pool.length) break;
+    if (taken.has(anchor.id)) continue;
+    taken.set(anchor.id, pool[nextItem]!);
+    nextItem += 1;
+  }
+
+  const items: ItemPlacement[] = [];
+  const seated: { anchor: Anchor; itemId: string }[] = [];
+  const bare: Anchor[] = [];
+
+  for (const anchor of anchors) {
+    const itemId = taken.get(anchor.id);
+    if (itemId == null) {
+      bare.push(anchor);
+      continue;
+    }
+    items.push({
+      key: `item_${anchor.id}`,
       anchorId: anchor.id,
       itemId,
       x: planeX(anchor.u, anchor.depth),
       y: planeY(anchor.depth),
       scale: planeScale(anchor.depth),
       z: anchor.depth,
-    };
-  });
+    });
+    seated.push({ anchor, itemId });
+  }
 
   // Occupied anchors, front-most first: a cat at a near item is worth more to
   // the scene than a cat at one barely visible against the horizon.
-  const occupied = anchors
-    .slice(0, drawnItems.length)
-    .map((anchor, i) => ({ anchor, itemId: drawnItems[i]! }))
-    .sort((a, b) => b.anchor.depth - a.anchor.depth);
-
-  const bare = anchors.slice(drawnItems.length);
+  const occupied = seated.sort((a, b) => b.anchor.depth - a.anchor.depth);
 
   const cats: CatPlacement[] = [];
   for (let slot = 0; slot < catCount; slot++) {
@@ -343,10 +407,45 @@ export function layoutScene({ hoodId, placedItems, catCount }: LayoutInput): Sce
     });
   }
 
+  /**
+   * What is left over becomes somewhere to put something.
+   *
+   * The Hood had no way to add an item to a particular place at all: you
+   * tapped an item already down, or you used the drawer and the scene
+   * decided for you. Pan away from the middle and there was nothing to
+   * do out there, which is most of a world two and a half screens wide.
+   *
+   * They are spread ACROSS the width rather than taken in anchor order,
+   * because anchor order is shuffled and would cluster them — and a
+   * cluster defeats the point, which is that panning somewhere new
+   * should offer you something new.
+   */
+  const catsOnBare = Math.max(0, catCount - occupied.length);
+  const candidates = bare
+    .slice(catsOnBare)
+    .filter((a) => a.depth >= SPOT_MIN_DEPTH)
+    .sort((a, b) => a.u - b.u);
+
+  const take = Math.min(MAX_SPOTS, candidates.length);
+  const spots: SpotPlacement[] = [];
+  for (let i = 0; i < take; i++) {
+    const pick = take === 1 ? 0 : Math.round((i * (candidates.length - 1)) / (take - 1));
+    const anchor = candidates[pick]!;
+    spots.push({
+      key: `spot_${anchor.id}`,
+      anchorId: anchor.id,
+      x: planeX(anchor.u, anchor.depth),
+      y: planeY(anchor.depth),
+      scale: planeScale(anchor.depth),
+      z: anchor.depth,
+    });
+  }
+
   return {
     items,
     cats,
-    hiddenItemCount: placedItems.length - drawnItems.length,
+    spots,
+    hiddenItemCount: placedItems.length - items.length,
   };
 }
 

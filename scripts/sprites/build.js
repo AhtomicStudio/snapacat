@@ -186,6 +186,11 @@ export interface SpriteAnimation {
   frames: number[];
   /** Per-frame hold time in ms, parallel to \`frames\`. Asymmetric timings carry the ease. */
   durations: number[];
+  /**
+   * Which band of a wrapped sheet these frames live on. Absent means the
+   * top band, which is every sheet that still fits on one row.
+   */
+  row?: number;
 }
 
 export const ANIMATIONS: Record<'idle' | 'sleep', SpriteAnimation> = {
@@ -338,7 +343,7 @@ const { renderFrame, buildPartAtlas } = require('./compositor');
 const { ALL: ALL_DIRS, RESOLVE } = require('./directions');
 /** Directions derived by mirroring, for the preview harness to label. */
 const RESOLVE_MIRRORED = new Set(ALL_DIRS.filter((d) => RESOLVE[d].mirror));
-const { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, sheetLayout } = require('./animations');
+const { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, ACT_MAX_COLS, sheetLayout } = require('./animations');
 
 /**
  * Checks the composed geometry once, before any sheet is written.
@@ -428,19 +433,22 @@ function verifyDirFrames(atlas) {
  * the flavour idles. Keeping one packer means the shadow compositing, the
  * palette resolution and the frame blit cannot drift apart between them.
  */
-function packSheet(breed, atlas, dirs, order) {
-  const { layout, totalCols } = sheetLayout(order);
+function packSheet(breed, atlas, dirs, order, maxCols = Infinity) {
+  const { layout, totalCols, rows } = sheetLayout(order, maxCols);
   const width = FRAME_SIZE * totalCols;
-  const height = FRAME_SIZE * dirs.length;
+  // Bands multiply rows: the directional sheet is one band per direction,
+  // the action sheet is one direction spread across several bands.
+  const height = FRAME_SIZE * dirs.length * rows;
   const rgba = Buffer.alloc(width * height * 4);
   const palette = resolvePalette(breed);
 
-  for (let row = 0; row < dirs.length; row++) {
-    const dir = dirs[row];
+  for (let d = 0; d < dirs.length; d++) {
+    const dir = dirs[d];
 
     for (const animName of order) {
       const anim = DIR_ANIMATIONS[animName];
-      const { startCol } = layout[animName];
+      const { startCol, row: band } = layout[animName];
+      const row = d * rows + band;
 
       for (let f = 0; f < anim.frames.length; f++) {
         const { buf, whiskers, shadow } = renderFrame(dir, animName, f, atlas, breed);
@@ -484,7 +492,7 @@ function packSheet(breed, atlas, dirs, order) {
     }
   }
 
-  return { rgba, width, height, totalCols };
+  return { rgba, width, height, totalCols, rows };
 }
 
 /** The 8-direction locomotion sheet. */
@@ -494,7 +502,7 @@ function buildDirSheet(breed, atlas) {
 
 /** The single-row, front-facing flavour-idle sheet. */
 function buildActSheet(breed, atlas) {
-  return packSheet(breed, atlas, ['S'], ACT_ORDER);
+  return packSheet(breed, atlas, ['S'], ACT_ORDER, ACT_MAX_COLS);
 }
 
 /**
@@ -555,17 +563,18 @@ function writeDirContactSheet(breed, atlas) {
 /**
  * Extended manifest with directional sheet data.
  */
-function writeDirManifest(breeds, frameCount, totalDirCols, totalActCols) {
+function writeDirManifest(breeds, frameCount, totalDirCols, totalActCols, totalActRows) {
   const entries = breeds.map((b) => `  ${b.id}: require('./${b.id}.png'),`).join('\n');
   const dirEntries = breeds.map((b) => `  ${b.id}: require('./${b.id}_dir.png'),`).join('\n');
   const actEntries = breeds.map((b) => `  ${b.id}: require('./${b.id}_act.png'),`).join('\n');
 
-  const actLayout = sheetLayout(ACT_ORDER).layout;
+  const actGrid = sheetLayout(ACT_ORDER, ACT_MAX_COLS);
+  const actLayout = actGrid.layout;
   const actAnims = ACT_ORDER.map((name) => {
     const anim = DIR_ANIMATIONS[name];
     const l = actLayout[name];
     const frameIndices = anim.sequence.map((s) => l.startCol + s);
-    return `  ${name}: { frames: [${frameIndices.join(', ')}], durations: [${anim.durations.join(', ')}] },`;
+    return `  ${name}: { frames: [${frameIndices.join(', ')}], durations: [${anim.durations.join(', ')}], row: ${l.row} },`;
   }).join('\n');
   const actNames = ACT_ORDER.map((n) => `'${n}'`).join(' | ');
   // Derived, not written out by hand. Dropping `sleep` from the directional
@@ -619,6 +628,11 @@ export interface SpriteAnimation {
   frames: number[];
   /** Per-frame hold time in ms, parallel to \`frames\`. Asymmetric timings carry the ease. */
   durations: number[];
+  /**
+   * Which band of a wrapped sheet these frames live on. Absent means the
+   * top band, which is every sheet that still fits on one row.
+   */
+  row?: number;
 }
 
 export const ANIMATIONS: Record<'idle' | 'sleep', SpriteAnimation> = {
@@ -701,6 +715,9 @@ export function getDirSpriteSheet(spriteId: string): ImageSourcePropType {
  * moves never decodes the big texture.
  */
 export const ACT_FRAME_COUNT = ${totalActCols};
+
+/** How many bands the action sheet is wrapped into. */
+export const ACT_ROW_COUNT = ${totalActRows};
 
 export type ActAnimation = ${actNames};
 
@@ -801,6 +818,7 @@ function main() {
   verifyDirFrames(atlas);
   let totalDirCols = 0;
   let totalActCols = 0;
+  let totalActRows = 1;
 
   for (const breed of breeds) {
     const { rgba, width, height, totalCols } = buildDirSheet(breed, atlas);
@@ -811,10 +829,11 @@ function main() {
 
     const act = buildActSheet(breed, atlas);
     totalActCols = act.totalCols;
+    totalActRows = act.rows;
     writeSheet(path.join(OUT_DIR, `${breed.id}_act.png`), act.rgba, act.width, act.height, DISPLAY_SCALE);
   }
 
-  writeDirManifest(breeds, frames.length, totalDirCols, totalActCols);
+  writeDirManifest(breeds, frames.length, totalDirCols, totalActCols, totalActRows);
   writePreviewData(breeds, totalDirCols, totalActCols);
   writeTemplate(frames);
   writeContactSheet(breeds, frames);
@@ -827,9 +846,9 @@ function main() {
   console.log(`✓ ${breeds.length} sprite sheets  (${frames.length} frames, ${sheetPx})`);
   console.log(`  → src/assets/sprites/`);
   console.log(`✓ ${breeds.length} directional sheets  (${totalCols}×${ALL_DIRS.length} frames, ${dirPx})`);
-  const actCols = sheetLayout(ACT_ORDER).totalCols;
-  const actPx = `${FRAME_SIZE * actCols * DISPLAY_SCALE}x${FRAME_SIZE * DISPLAY_SCALE}`;
-  console.log(`✓ ${breeds.length} action sheets       (${actCols}×1 frames, ${actPx})`);
+  const { totalCols: actCols, rows: actRows } = sheetLayout(ACT_ORDER, ACT_MAX_COLS);
+  const actPx = `${FRAME_SIZE * actCols * DISPLAY_SCALE}x${FRAME_SIZE * actRows * DISPLAY_SCALE}`;
+  console.log(`✓ ${breeds.length} action sheets       (${actCols}×${actRows} frames, ${actPx})`);
   console.log(`  → src/assets/sprites/`);
   console.log(`✓ template, palette, contact sheet, anim strip, dir contact`);
   console.log(`  → src/assets/sprites/template/`);

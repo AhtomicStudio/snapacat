@@ -20,11 +20,24 @@
 
 export type WallStyle = 'brick' | 'concrete' | 'planks' | 'hedge' | 'tile' | 'none';
 
+/**
+ * What the ground is made of.
+ *
+ * The ground used to be drawn one way everywhere: speckled grit with long
+ * asphalt joints running through it. On a car park that is right. On the
+ * Garden it meant a lawn with expansion joints in it, and grass with no
+ * blades — a flat green field, which was the most obviously unfinished
+ * surface left in the game.
+ */
+export type GroundStyle = 'asphalt' | 'grass' | 'roofdeck';
+
 export interface SceneDressing {
   /** Ground plane base colour, before the time-of-day wash. */
   ground: string;
   /** Flecks scattered across the ground — grit, leaves, gravel. */
   speckle: string;
+  /** How the ground plane is textured. */
+  groundStyle: GroundStyle;
   /** Mid-ground wall running along the horizon. */
   wall: string;
   /** Mortar / seam colour drawn into the wall. */
@@ -38,6 +51,7 @@ export interface SceneDressing {
 const DEFAULT_DRESSING: SceneDressing = {
   ground: '#6E6A63',
   speckle: '#3A3733',
+  groundStyle: 'asphalt',
   wall: '#8A5346',
   seam: '#6B3E34',
   wallStyle: 'brick',
@@ -57,6 +71,7 @@ const DRESSING: Record<string, SceneDressing> = {
     // Asphalt, not lawn. This is a car park behind some buildings.
     ground: '#6B6862',
     speckle: '#3E3B37',
+    groundStyle: 'asphalt',
     wall: '#8A5346',
     seam: '#66392F',
     wallStyle: 'brick',
@@ -67,6 +82,9 @@ const DRESSING: Record<string, SceneDressing> = {
   env_rooftop: {
     ground: '#8A8378',
     speckle: '#5A544C',
+    // Felt and ballast, not tarmac. Reusing the car park's asphalt was most
+    // of why the Rooftop read as the Alley with a different wall behind it.
+    groundStyle: 'roofdeck',
     wall: '#9C948A',
     seam: '#7A736A',
     wallStyle: 'concrete',
@@ -76,6 +94,7 @@ const DRESSING: Record<string, SceneDressing> = {
   env_garden: {
     ground: '#7E9464',
     speckle: '#57683F',
+    groundStyle: 'grass',
     wall: '#4E6B42',
     seam: '#3C5432',
     wallStyle: 'hedge',
@@ -84,6 +103,7 @@ const DRESSING: Record<string, SceneDressing> = {
   env_laundromat: {
     ground: '#9E9689',
     speckle: '#726A5F',
+    groundStyle: 'asphalt',
     wall: '#C8BCA8',
     seam: '#A2947E',
     wallStyle: 'tile',
@@ -92,6 +112,7 @@ const DRESSING: Record<string, SceneDressing> = {
   env_night_market: {
     ground: '#5E5750',
     speckle: '#3A342E',
+    groundStyle: 'asphalt',
     wall: '#6E4A3E',
     seam: '#523529',
     wallStyle: 'planks',
@@ -102,6 +123,7 @@ const DRESSING: Record<string, SceneDressing> = {
   env_apartment: {
     ground: '#9A7B58',
     speckle: '#7A5E41',
+    groundStyle: 'asphalt',
     wall: '#CBB79C',
     seam: '#A9906F',
     wallStyle: 'planks',

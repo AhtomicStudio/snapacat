@@ -23,6 +23,7 @@ import {
 import {
   ACT_ANIMATIONS,
   ACT_FRAME_COUNT,
+  ACT_ROW_COUNT,
   ANIMATIONS,
   DIRECTIONS,
   DIR_ANIMATIONS,
@@ -268,10 +269,15 @@ export const SettledCatSprite = React.memo(function SettledCatSprite({
   style,
 }: SceneCatSpriteProps & { animation: ActAnimation; paused?: boolean }) {
   return (
+    // The action sheet is wrapped into bands so the texture stays well
+    // inside what every device can hold. No animation straddles two, so
+    // the band is a static offset and only the column is animated.
     <SheetSprite
       source={getActSpriteSheet(spriteId)}
       anim={ACT_ANIMATIONS[animation]}
       frameCount={ACT_FRAME_COUNT}
+      rowCount={ACT_ROW_COUNT}
+      row={ACT_ANIMATIONS[animation].row ?? 0}
       size={size}
       paused={paused}
       phase={phase}

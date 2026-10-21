@@ -11,13 +11,11 @@ import {
   Animated,
   Easing,
   LayoutAnimation,
-  Platform,
-  SafeAreaView,
   ScrollView,
   Text,
-  UIManager,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { UserProgression, ItemTier } from '../types';
 import { THEMES, getThemeById } from '../config/themes';
 import { ENVIRONMENTS, getEnvironmentById } from '../config/environments';
@@ -40,10 +38,10 @@ import { CARD_SHADOW, HIT_SLOP_MD } from '../utils/styles';
 import { Touchable } from '../components/Touchable';
 import { font, color, space, radius, TAP_MIN } from '../theme';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// LayoutAnimation needed an explicit Android opt-in under the old
+// architecture. Under Fabric it is on by default and the setter is a no-op
+// that logs a warning on every launch — so calling it bought a yellow box and
+// nothing else. configureNext below still animates.
 
 // ---------------------------------------------------------------------------
 // Types

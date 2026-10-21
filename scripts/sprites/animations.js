@@ -49,8 +49,18 @@ const DIR_ANIMATIONS = {
    *
    * Three things make this read as walking rather than jittering:
    *
-   * - **Horizontal travel.** dx ±2 is the minimum that registers at 32px; ±1
-   *   disappears into the outline.
+   * - **Horizontal travel, as a SWING and not a slide.** The legs used to
+   *   translate whole on dx ±2, which detaches the top of the leg from the
+   *   hip: four pegs sliding under a torso that never moves, and at
+   *   contact the pairs bunch into two clusters 4px apart, which is an
+   *   insect\u2019s stance rather than a cat\u2019s. `swing` ramps the offset down
+   *   the leg instead, so the hip stays where it is joined and the paw
+   *   carries the stride. ±3 was tried first and reads as a lunge — the
+   *   front and hind paws end up six pixels apart and the cat is doing the
+   *   splits. ±2 front, ±1 hind is a toddle, which is what we want.
+   * - **The front pair reaches further than the hind pair.** Equal travel
+   *   front and back is what makes a four-legged walk look mechanical; a
+   *   cat reaches with the front and drives with the back.
    * - **The body sits DOWN on contact and rises on passing.** That is the
    *   weight. Note contact legs use dy 0, not +1 — pushing the planted foot
    *   down put it on row y31, which is where the ground shadow lives.
@@ -63,29 +73,31 @@ const DIR_ANIMATIONS = {
    */
   walk: {
     frames: [
-      // Frame 0: left contact — FL+BR planted forward, FR+BL lifted and back.
+      // Frame 0: left contact — FL reaches forward, BR planted under the
+      // hip and driving; the right pair is lifted and swung back.
       {
-        legFL: { dx: 2, dy: 0 }, legBR: { dx: 2, dy: 0 },
-        legFR: { dx: -2, dy: -1 }, legBL: { dx: -2, dy: -1 },
+        legFL: { swing: 2, dy: 0 }, legBR: { swing: 1, dy: 0 },
+        legFR: { swing: -2, dy: -1 }, legBL: { swing: -1, dy: -1 },
         body: { dy: 0 }, head: { dy: 0 }, tail: { dx: 1, dy: 0 },
       },
-      // Frame 1: left passing — body up, lifted pair at full clearance.
+      // Frame 1: left passing — body up, lifted pair at full clearance and
+      // hanging straight below the hip as it swings through.
       {
-        legFL: { dx: 0, dy: 0 }, legBR: { dx: 0, dy: 0 },
-        legFR: { dx: 0, dy: -2 }, legBL: { dx: 0, dy: -2 },
+        legFL: { swing: 0, dy: 0 }, legBR: { swing: 0, dy: 0 },
+        legFR: { swing: 0, dy: -2 }, legBL: { swing: 0, dy: -2 },
         body: { dy: -1 }, head: { dy: -1 }, tail: { dx: 0, dy: 0 },
       },
       // Frame 2: right contact — the mirror of frame 0. The tail is a frame
       // behind the body here, which is where the follow-through lives.
       {
-        legFR: { dx: 2, dy: 0 }, legBL: { dx: 2, dy: 0 },
-        legFL: { dx: -2, dy: -1 }, legBR: { dx: -2, dy: -1 },
+        legFR: { swing: 2, dy: 0 }, legBL: { swing: 1, dy: 0 },
+        legFL: { swing: -2, dy: -1 }, legBR: { swing: -1, dy: -1 },
         body: { dy: 0 }, head: { dy: 0 }, tail: { dx: -1, dy: -1 },
       },
       // Frame 3: right passing.
       {
-        legFR: { dx: 0, dy: 0 }, legBL: { dx: 0, dy: 0 },
-        legFL: { dx: 0, dy: -2 }, legBR: { dx: 0, dy: -2 },
+        legFR: { swing: 0, dy: 0 }, legBL: { swing: 0, dy: 0 },
+        legFL: { swing: 0, dy: -2 }, legBR: { swing: 0, dy: -2 },
         body: { dy: -1 }, head: { dy: -1 }, tail: { dx: 0, dy: -1 },
       },
     ],
@@ -264,6 +276,85 @@ const DIR_ANIMATIONS = {
     sequence: [0, 1, 0, 2, 0],
     durations: [760, 320, 240, 320, 820],
   },
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Object interactions
+  //
+  // What a cat does AT the thing you put down. The flavour idles above are
+  // what a cat does anywhere; these are the ones that only make sense
+  // beside a bowl, a toy or a bed, and they are the payoff for placing an
+  // item at all — before them, a cat at a food bowl and a cat on bare
+  // ground were doing identical things.
+  //
+  // Composed from the parts that already exist rather than from new art.
+  // The head has a lick variant and a squint, the legs take an offset, and
+  // between them that is enough for eating, batting and sniffing. Authoring
+  // new head cells would have been the obvious move and the wrong one: it
+  // multiplies across 20 breeds and 6 variants for poses the player sees at
+  // 44 points.
+  //
+  // Same contract as the flavour idles: start and end at rest, and keep
+  // breathing through the middle.
+  // ─────────────────────────────────────────────────────────────────────
+
+  /**
+   * Eating. The head goes down to the bowl and the jaw works.
+   *
+   * The dip is two pixels and no more. Three put the muzzle through the
+   * chest — the head is anchored above a torso that does not move, so a
+   * deep dip does not lower the head so much as bury it.
+   */
+  eat: {
+    frames: [
+      {},
+      { head: { dy: 1, v: 2 }, body: { v: 1 } },
+      { head: { dy: 2, v: 4 }, body: { v: 1 } },
+      { head: { dy: 2, v: 2 }, body: { v: 2 } },
+    ],
+    sequence: [0, 1, 2, 3, 2, 3, 2, 1, 0],
+    durations: [520, 120, 260, 200, 220, 200, 260, 130, 620],
+  },
+
+  /**
+   * Batting at something — the toy animation.
+   *
+   * A forepaw comes up and bats, twice.
+   *
+   * This is the one interaction that needed new art. Offsetting the
+   * standing leg hides it behind the chest; shearing it sideways buys
+   * three visible pixels. The pose is a dedicated leg cell instead —
+   * LEG_V.RAISED in parts.js, which explains the geometry. Here the leg
+   * just alternates between the two cells while the cat keeps breathing,
+   * and the ear flick on the last beat stops the loop reading as a
+   * two-frame toggle.
+   */
+  paw: {
+    frames: [
+      {},
+      { legFL: { v: 1 }, body: { v: 1 } },
+      { body: { v: 2 } },
+      { legFL: { v: 1 }, head: { v: 5 }, body: { v: 1 } },
+    ],
+    sequence: [0, 1, 2, 3, 2, 1, 0],
+    durations: [620, 150, 130, 160, 130, 150, 660],
+  },
+
+  /**
+   * Sniffing. Head forward, ears working.
+   *
+   * The quietest of the three on purpose: it is the one that fits anything
+   * you can put down, so it is the one that will play most often, and a big
+   * gesture at that frequency becomes wallpaper. The ear flick carries it.
+   */
+  sniff: {
+    frames: [
+      {},
+      { head: { dy: 1 }, body: { v: 1 } },
+      { head: { dy: 2, v: 5 }, body: { v: 1 } },
+    ],
+    sequence: [0, 1, 2, 1, 2, 1, 0],
+    durations: [620, 140, 120, 120, 120, 160, 660],
+  },
 };
 
 /**
@@ -310,21 +401,51 @@ const ANIM_ORDER = ['idle', 'walk'];
  * loadable and a Hood full of dozing cats never decodes the expensive one at
  * all — which is the common case after dark, when half the Hood is asleep.
  */
-const ACT_ORDER = ['idle', 'blink', 'groom', 'yawn', 'look', 'tailflick', 'sleep'];
+const ACT_ORDER = [
+  'idle', 'blink', 'groom', 'yawn', 'look', 'tailflick', 'sleep',
+  // Object interactions — see the block above.
+  'eat', 'paw', 'sniff',
+];
 
 /**
  * Returns the column offset where each animation starts in the sheet row,
  * and the total column count.
  */
-function sheetLayout(order = ANIM_ORDER) {
-  let col = 0;
+/**
+ * Where each animation sits on its sheet.
+ *
+ * `maxCols` wraps the strip into bands. It exists because a single row
+ * has a hard ceiling: the action sheet was 26 frames at 128px, which is
+ * a 3328px texture — already past the 2048 that GLES2 guarantees, and
+ * adding the object-interaction animations would have pushed it past
+ * 4096 too. Wrapping costs nothing at runtime because an animation is
+ * never split across bands: the row stays constant for the whole of one
+ * animation, so the renderer selects it with a static offset and only
+ * the column is animated.
+ */
+function sheetLayout(order = ANIM_ORDER, maxCols = Infinity) {
   const layout = {};
+  let row = 0;
+  let col = 0;
+  let widest = 0;
   for (const name of order) {
     const anim = DIR_ANIMATIONS[name];
-    layout[name] = { startCol: col, frameCount: anim.frames.length };
-    col += anim.frames.length;
+    const count = anim.frames.length;
+    if (col > 0 && col + count > maxCols) {
+      row += 1;
+      col = 0;
+    }
+    layout[name] = { startCol: col, frameCount: count, row };
+    col += count;
+    if (col > widest) widest = col;
   }
-  return { layout, totalCols: col };
+  return { layout, totalCols: widest, rows: row + 1 };
 }
 
-module.exports = { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, sheetLayout };
+/**
+ * Band width for the action sheet. Fourteen keeps the texture at 1792px
+ * with room for several more animations before it needs another band.
+ */
+const ACT_MAX_COLS = 14;
+
+module.exports = { DIR_ANIMATIONS, ANIM_ORDER, ACT_ORDER, ACT_MAX_COLS, sheetLayout };
