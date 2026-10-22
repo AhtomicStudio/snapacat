@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@400;600;700&display=swap">
+  <style>
+    body { margin: 0; font-family: Nunito, system-ui, sans-serif; }
+    a { color: #E67035; } a:hover { color: #C25A26; }
+    /* Pixel art must never be smoothed — the keyline is the whole read. */
+    .px { image-rendering: pixelated; }
+  </style>
+</helmet>
+
+<div style="width: 390px; height: 844px; position: relative; overflow: hidden; background: #141A32; font-family: Nunito, system-ui, sans-serif;">
+
+  <!-- ── Sky ─────────────────────────────────────────────────────────── -->
+  <div style="position: absolute; inset: 0 0 62% 0; background: linear-gradient(#141A32, #1E2544 55%, #33395E);"></div>
+
+  <!-- Moon, clear of the chrome -->
+  <div style="position: absolute; left: 258px; top: 132px; width: 38px; height: 38px; border-radius: 50%; background: #EFF1FF; opacity: 0.92;"></div>
+
+  <!-- Skyline. Buildings clear the wall, which is what stopped the sky
+       reading as an empty navy field. -->
+  <div style="position: absolute; left: 0; right: 0; top: 172px; height: 148px; display: flex; align-items: flex-end;">
+    <div style="width: 46px; height: 96px; background: #0E1226;"></div>
+    <div style="width: 38px; height: 132px; background: #0E1226;"></div>
+    <div style="width: 54px; height: 108px; background: #0E1226;"></div>
+    <div style="width: 42px; height: 148px; background: #0E1226;"></div>
+    <div style="width: 50px; height: 120px; background: #0E1226;"></div>
+    <div style="width: 36px; height: 142px; background: #0E1226;"></div>
+    <div style="width: 48px; height: 104px; background: #0E1226;"></div>
+    <div style="width: 44px; height: 128px; background: #0E1226;"></div>
+    <div style="width: 40px; height: 112px; background: #0E1226;"></div>
+  </div>
+  <!-- Lit windows -->
+  <div style="position: absolute; left: 0; right: 0; top: 172px; height: 148px;">
+    <div style="position: absolute; left: 12px; top: 66px; display: flex; gap: 5px;">
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .18;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+    </div>
+    <div style="position: absolute; left: 92px; top: 52px; display: flex; gap: 5px;">
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .18;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+    </div>
+    <div style="position: absolute; left: 190px; top: 34px; display: flex; gap: 5px;">
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .18;"></div>
+    </div>
+    <div style="position: absolute; left: 292px; top: 58px; display: flex; gap: 5px;">
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .18;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+      <div style="width: 4px; height: 5px; background: #FFD98A; opacity: .7;"></div>
+    </div>
+  </div>
+
+  <!-- ── Mid-ground wall ─────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 0; right: 0; top: 320px; height: 74px; background:
+      repeating-linear-gradient(to bottom, #66392F 0 2px, #8A5346 2px 12px),
+      #8A5346;">
+    <div style="position: absolute; inset: 0; background:
+        repeating-linear-gradient(to right, transparent 0 25px, #66392F 25px 26.5px);
+        opacity: .55;"></div>
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 4px; background: #66392F;"></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: rgba(0,0,0,.16);"></div>
+  </div>
+
+  <!-- ── Ground ──────────────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 0; right: 0; top: 394px; bottom: 0; background: #6B6862;">
+    <div style="position: absolute; left: 0; right: 0; top: 0; height: 3px; background: #66392F; opacity: .8;"></div>
+    <div style="position: absolute; left: 0; right: 0; top: 3px; height: 16px; background: rgba(0,0,0,.14);"></div>
+    <div style="position: absolute; inset: 0; background: linear-gradient(rgba(0,0,0,.055), transparent 60%);"></div>
+  </div>
+
+  <!-- ── Actors ──────────────────────────────────────────────────────── -->
+  <!-- Far: a cat asleep by a bowl -->
+  <div style="position: absolute; left: 40px; top: 404px; width: 62px; height: 62px;">
+    <div style="position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 32px; height: 7px; border-radius: 50%; background: rgba(6,8,20,.38);"></div>
+    <div class="px" style="width: 62px; height: 62px; background-image: url(./cat_calico.png); background-size: 372px 62px; background-position: -186px 0;"></div>
+  </div>
+  <img class="px" src="./prop_kibble_bowl.png" style="position: absolute; left: 96px; top: 416px; width: 52px; height: 52px;">
+
+  <!-- Mid: tuxedo at the catnip -->
+  <img class="px" src="./prop_catnip.png" style="position: absolute; left: 214px; top: 452px; width: 66px; height: 66px;">
+  <div style="position: absolute; left: 258px; top: 448px; width: 76px; height: 76px;">
+    <div style="position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 38px; height: 8px; border-radius: 50%; background: rgba(6,8,20,.38);"></div>
+    <div class="px" style="width: 76px; height: 76px; background-image: url(./cat_tuxedo.png); background-size: 456px 76px; background-position: 0 0;"></div>
+  </div>
+
+  <!-- Near: seal point on the bed -->
+  <img class="px" src="./prop_cat_bed.png" style="position: absolute; left: 92px; top: 534px; width: 92px; height: 92px;">
+  <div style="position: absolute; left: 148px; top: 524px; width: 100px; height: 100px;">
+    <div style="position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 50px; height: 11px; border-radius: 50%; background: rgba(6,8,20,.38);"></div>
+    <div class="px" style="width: 100px; height: 100px; background-image: url(./cat_sealpoint.png); background-size: 600px 100px; background-position: 0 0;"></div>
+  </div>
+
+  <!-- Night wash -->
+  <div style="position: absolute; inset: 0; background: #5C74C8; opacity: .14; pointer-events: none;"></div>
+
+  <!-- ── Top chrome ──────────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 16px; right: 16px; top: 52px; display: flex; align-items: flex-start; gap: 10px;">
+    <!-- Hood switcher -->
+    <div style="flex: 1; display: flex; align-items: center; gap: 8px; background: rgba(28,32,58,.78); border: 1px solid rgba(180,192,255,.24); border-radius: 999px; padding: 9px 14px; backdrop-filter: blur(6px);">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFB183" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/>
+      </svg>
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-weight: 700; font-size: 15px; color: #F2F3FF; flex: 1;">Work Parking Lot</span>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#A9B2D8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+
+    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+      <!-- PawPoints -->
+      <div style="display: flex; align-items: center; gap: 6px; background: rgba(28,32,58,.78); border: 1px solid rgba(180,192,255,.24); border-radius: 999px; padding: 9px 13px;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="#FFB183">
+          <ellipse cx="7" cy="9" rx="2.1" ry="2.7"/><ellipse cx="12" cy="7" rx="2.1" ry="2.9"/>
+          <ellipse cx="17" cy="9" rx="2.1" ry="2.7"/>
+          <path d="M12 12c3.2 0 5.6 2.3 5.6 4.7 0 1.9-1.6 2.9-3.4 2.6-.9-.2-1.5-.4-2.2-.4s-1.3.2-2.2.4c-1.8.3-3.4-.7-3.4-2.6C6.4 14.3 8.8 12 12 12z"/>
+        </svg>
+        <span style="font-family: Quicksand, system-ui, sans-serif; font-weight: 700; font-size: 14px; color: #F2F3FF;">250</span>
+      </div>
+      <!-- Ambience -->
+      <div style="display: flex; align-items: center; gap: 6px; background: rgba(28,32,58,.78); border: 1px solid rgba(180,192,255,.24); border-radius: 999px; padding: 7px 12px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFD98A"><path d="M20 14.5A8.5 8.5 0 019.5 4a8.5 8.5 0 1010.5 10.5z"/></svg>
+        <span style="font-weight: 700; font-size: 12px; color: #A9B2D8;">Late</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Bottom chrome — chunky, physical, no frosted glass ──────────── -->
+  <div style="position: absolute; left: 20px; right: 20px; bottom: 132px; display: flex; align-items: flex-end; justify-content: space-between;">
+    <!-- Shop -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+      <div style="width: 58px; height: 58px; border-radius: 20px; background: #FFF7EE; box-shadow: 0 5px 0 #D9C4AE, 0 10px 18px rgba(20,14,8,.35); display: flex; align-items: center; justify-content: center;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 8h16l-1.2 11.2a2 2 0 01-2 1.8H7.2a2 2 0 01-2-1.8z"/><path d="M8.5 8V6a3.5 3.5 0 017 0v2"/>
+        </svg>
+      </div>
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 11px; font-weight: 700; color: #F2F3FF; text-shadow: 0 1px 3px rgba(0,0,0,.6);">Shop</span>
+    </div>
+
+    <!-- Camera — the primary action, raised -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: 8px;">
+      <div style="width: 76px; height: 76px; border-radius: 26px; background: linear-gradient(#FFA271, #FF8E53); box-shadow: 0 6px 0 #C25A26, 0 14px 24px rgba(255,142,83,.4); display: flex; align-items: center; justify-content: center;">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 8.5A2.5 2.5 0 015.5 6h2L9 4h6l1.5 2h2A2.5 2.5 0 0121 8.5v9A2.5 2.5 0 0118.5 20h-13A2.5 2.5 0 013 17.5z"/>
+          <circle cx="12" cy="13" r="3.6"/>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Cat-a-log -->
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 5px;">
+      <div style="position: relative; width: 58px; height: 58px; border-radius: 20px; background: #FFF7EE; box-shadow: 0 5px 0 #D9C4AE, 0 10px 18px rgba(20,14,8,.35); display: flex; align-items: center; justify-content: center;">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#E67035" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 4.5A1.5 1.5 0 016.5 3H18a1 1 0 011 1v15a1 1 0 01-1 1H6.5A1.5 1.5 0 015 18.5z"/><path d="M9 8h6M9 12h4"/>
+        </svg>
+        <!-- New-cat dot: the one badge worth having -->
+        <div style="position: absolute; top: -3px; right: -3px; width: 20px; height: 20px; border-radius: 50%; background: #E8536A; border: 2.5px solid #141A32; display: flex; align-items: center; justify-content: center;">
+          <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 10px; font-weight: 700; color: #fff;">2</span>
+        </div>
+      </div>
+      <span style="font-family: Quicksand, system-ui, sans-serif; font-size: 11px; font-weight: 700; color: #F2F3FF; text-shadow: 0 1px 3px rgba(0,0,0,.6);">Cat-a-log</span>
+    </div>
+  </div>
+
+  <!-- ── Drawer peek ─────────────────────────────────────────────────── -->
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; height: 112px; background: #FAF6F0; border-radius: 26px 26px 0 0; box-shadow: 0 -6px 22px rgba(20,14,8,.3);">
+    <div style="width: 42px; height: 5px; border-radius: 3px; background: #DED6CB; margin: 10px auto 0;"></div>
+    <div style="padding: 12px 22px 0;">
+      <div style="font-family: Quicksand, system-ui, sans-serif; font-size: 17px; font-weight: 700; color: #2C2A29;">A few regulars are hanging about.</div>
+      <div style="font-size: 13px; color: #706B67; margin-top: 3px;">Playful prowlers stop by, and hungry regulars visit more.</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

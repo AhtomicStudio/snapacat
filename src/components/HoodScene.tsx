@@ -1,0 +1,1899 @@
+/**
+ * The Hood scene — a pannable, full-bleed 2.5D stage.
+ *
+ * This replaces the old 260px HoodCanvas strip. The change is not cosmetic:
+ * when the scene is a preview window with cards stacked under it, the app is a
+ * config screen with a picture on it. When the scene fills the display and the
+ * controls retreat into a sheet, the scene is the app.
+ *
+ * THE WORLD IS WIDER THAN THE WINDOW
+ *
+ * Everything lives on a world WORLD_WIDTHS screens across, and the player drags
+ * to look around. One screen felt cramped — six cats and a dozen goodies packed
+ * shoulder to shoulder with no lateral room on the perspective plane. Widening
+ * the world buys space without shrinking anything, and gives dragging a payoff.
+ *
+ * Layers, back to front, and how fast each one tracks the camera:
+ *
+ *   sky        static   banded gradient standing in for a real gradient
+ *   moon/cloud  0.20×   near-fixed, the way distant things behave
+ *   skyline     0.55×   seeded silhouette; the parallax against the ground is
+ *                       what actually sells depth while panning
+ *   ground      1.00×   the plane, its actors, and everything you can touch
+ *   wash       static   a single tint tying the palette together
+ *
+ * ONE ART MEDIUM
+ *
+ * Props are pixel art from scripts/sprites/props.js, drawn to the same 32×32
+ * frame and keyline conventions as the cats. They used to be system emoji,
+ * which no amount of layout could make sit with a hand-authored sprite.
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Image, Text, View, type ViewStyle } from 'react-native';
+import { SettledCatSprite, WalkingCatSprite } from './CatSprite';
+import { useCatLife } from '../hooks/useCatLife';
+import { Touchable } from './Touchable';
+import { PLACEABLE_ITEMS, MAX_HOOD_CATS } from '../utils/spawnCalculator';
+import { getPropSheet } from '../assets/props';
+import {
+  HORIZON,
+  WORLD_WIDTHS,
+  hashSeed,
+  layoutScene,
+  paintOrder,
+  planeScale,
+  planeX,
+  planeY,
+  type CatPlacement,
+  type ItemPlacement,
+} from '../config/scene';
+import { skyPalette, isDark, type TimeOfDay } from '../utils/timeOfDay';
+import { getDressing, type SceneDressing, type GroundStyle } from '../config/sceneDressing';
+import { propLight, propMotion, type PropMotion } from '../config/propMotion';
+import { sceneryFor, type SceneryProp } from '../config/scenery';
+import { Clouds, Fireflies, LightPool, Motes, StarField, moteStyleFor } from './SceneAmbience';
+import { font } from '../theme';
+import { mixHex, shade, tint, hashIndex } from '../utils/colour';
+import { SoftBlob } from './SoftBlob';
+
+// ---------------------------------------------------------------------------
+// Sizing
+// ---------------------------------------------------------------------------
+
+/**
+ * Nominal sprite edge length at the near edge of the plane, before depth
+ * scaling. The old canvas drew every cat at 44px; at that size on a full screen
+ * they read as stickers.
+ *
+ * Props use the SAME nominal size, because they are authored at true relative
+ * scale inside their own 32×32 frame — a kibble bowl occupies about 13 of those
+ * 32 pixels. That means the size relationship between a cat and a bowl comes
+ * out of the art rather than out of a per-item fudge factor here.
+ */
+const ACTOR_BASE_SIZE = 104;
+
+/** How fast each parallax layer tracks the camera. 1 = locked to the ground. */
+const PARALLAX_SKY = 0.20;
+/** The distant row — slower, so it slides behind the nearer one as you pan. */
+const PARALLAX_FAR = 0.38;
+const PARALLAX_BACKDROP = 0.55;
+
+/**
+ * Bands used to approximate the sky gradient.
+ *
+ * Twelve left visible steps across a 400pt sky — about 33pt per band, which is
+ * wide enough to read as stripes rather than as a gradient, and it was the
+ * single most amateur thing on the screen. Thirty-two puts each step at a
+ * value difference the eye cannot resolve against this palette.
+ */
+const SKY_BANDS = 32;
+
+/**
+ * How much a distant layer is washed toward the sky behind it.
+ *
+ * Atmospheric perspective: air between you and a thing desaturates it and
+ * pulls it toward the sky's colour, and its absence is why the skyline read as
+ * a sticker laid on top rather than as something a mile away. The backdrop is
+ * pushed a third of the way to the horizon colour, the mid layer a tenth.
+ */
+const HAZE_FAR = 0.34;
+const HAZE_MID = 0.12;
+
+// ---------------------------------------------------------------------------
+// Backdrop — seeded silhouette at the horizon
+// ---------------------------------------------------------------------------
+
+interface BuildingSpec {
+  left: number;
+  width: number;
+  height: number;
+  windows: number;
+  /** What sits on top. A flat row of rectangles is what reads as a placeholder. */
+  roof: 'flat' | 'parapet' | 'pitched' | 'stepped';
+  /** Rooftop furniture — the thing that makes a skyline look drawn rather than generated. */
+  tower: boolean;
+  antenna: boolean;
+  vents: number;
+}
+
+/**
+ * Derives a skyline from the Hood id.
+ *
+ * Deterministic so a Hood always has the same skyline — the backdrop is part of
+ * what makes "Back Alley" feel like a specific place rather than a template.
+ */
+function buildSkyline(seed: number): BuildingSpec[] {
+  const specs: BuildingSpec[] = [];
+  let cursor = -0.03;
+  let i = 0;
+  // The world is wide, so the skyline has to run the whole way across it.
+  while (cursor < 1.02 && i < 40) {
+    const r1 = ((seed ^ Math.imul(i + 1, 0x27d4eb2d)) >>> 8) / 0xffffff;
+    const r2 = ((seed ^ Math.imul(i + 7, 0x165667b1)) >>> 8) / 0xffffff;
+    const width = 0.035 + r1 * 0.055;
+    // Buildings have to clear the mid-ground wall or the whole skyline hides
+    // behind it — which is exactly what happened at 26–110px against a 74px
+    // wall: one tall block poked out and the rest of the sky read as empty.
+    const height = 96 + r2 * 150;
+    const r3 = ((seed ^ Math.imul(i + 13, 0x9e3779b1)) >>> 8) / 0xffffff;
+    const r4 = ((seed ^ Math.imul(i + 23, 0xc2b2ae35)) >>> 8) / 0xffffff;
+
+    /**
+     * Roof shape and furniture.
+     *
+     * A row of plain rectangles reads as a placeholder no matter how well the
+     * heights are randomised, because every silhouette meets the sky at the
+     * same angle. What a real skyline has is variety at the TOP edge — that is
+     * the only part of a distant building you actually see — so the shape and
+     * what stands on it are rolled per building, and weighted so that plain
+     * flat roofs stay the majority and the water towers stay rare enough to
+     * be worth noticing.
+     */
+    const roof: BuildingSpec['roof'] =
+      r3 < 0.52 ? 'flat' : r3 < 0.74 ? 'parapet' : r3 < 0.89 ? 'stepped' : 'pitched';
+
+    specs.push({
+      left: cursor,
+      width,
+      height,
+      windows: 3 + Math.floor(r1 * 8),
+      roof,
+      tower: r4 > 0.82 && roof !== 'pitched',
+      antenna: r4 < 0.2,
+      vents: r3 > 0.6 ? 1 + Math.floor(r4 * 2) : 0,
+    });
+    // Overlap slightly so the roofline reads as a continuous block, not a fence.
+    cursor += width - 0.005;
+    i++;
+  }
+  return specs;
+}
+
+function Backdrop({
+  seed,
+  width,
+  horizonY,
+  colour,
+  lit,
+}: {
+  seed: number;
+  width: number;
+  horizonY: number;
+  colour: string;
+  lit: boolean;
+}) {
+  const skyline = useMemo(() => buildSkyline(seed), [seed]);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, width, top: 0, height: horizonY }}
+    >
+      {skyline.map((b, i) => {
+        const bw = b.width * width;
+        return (
+        <React.Fragment key={i}>
+          {/* ── Roof furniture, drawn behind the block so it rises out of it ── */}
+          {b.tower && (
+            // Water tower: a barrel on legs. The most recognisable rooftop
+            // silhouette there is, and the reason an American skyline reads as
+            // one at a glance.
+            <View style={{ position: 'absolute', left: b.left * width + bw * 0.42, bottom: b.height - 2, alignItems: 'center' }}>
+              <View style={{ width: 14, height: 11, borderTopLeftRadius: 5, borderTopRightRadius: 5, backgroundColor: colour }} />
+              <View style={{ flexDirection: 'row', gap: 7 }}>
+                <View style={{ width: 2, height: 7, backgroundColor: colour }} />
+                <View style={{ width: 2, height: 7, backgroundColor: colour }} />
+              </View>
+            </View>
+          )}
+          {b.antenna && (
+            <View style={{ position: 'absolute', left: b.left * width + bw * 0.7, bottom: b.height - 1, width: 2, height: 16, backgroundColor: colour }} />
+          )}
+          {Array.from({ length: b.vents }, (_, v) => (
+            <View
+              key={`v${v}`}
+              style={{
+                position: 'absolute',
+                left: b.left * width + bw * (0.12 + v * 0.3),
+                bottom: b.height - 1,
+                width: 7, height: 5, backgroundColor: colour,
+              }}
+            />
+          ))}
+          {b.roof === 'pitched' && (
+            // Faked with a rotated square: a true triangle needs borderWidth
+            // tricks that fight the parallax transform on the parent.
+            <View
+              style={{
+                position: 'absolute',
+                left: b.left * width + bw / 2 - bw * 0.3,
+                bottom: b.height - bw * 0.21,
+                width: bw * 0.6, height: bw * 0.6,
+                backgroundColor: colour,
+                transform: [{ rotate: '45deg' }],
+              }}
+            />
+          )}
+
+        <View
+          style={{
+            position: 'absolute',
+            left: b.left * width,
+            width: bw,
+            height: b.height,
+            bottom: 0,
+            backgroundColor: colour,
+            borderTopLeftRadius: b.roof === 'stepped' ? 3 : 0,
+            borderTopRightRadius: b.roof === 'stepped' ? 3 : 0,
+          }}
+        >
+          {b.roof === 'parapet' && (
+            // A lip along the roofline, slightly proud of the block. Catches
+            // the eye as a built edge rather than a cut.
+            <View style={{ position: 'absolute', top: -3, left: -2, right: -2, height: 4, backgroundColor: colour }} />
+          )}
+          {lit && (
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                paddingTop: 9,
+                paddingHorizontal: 5,
+                gap: 4,
+              }}
+            >
+              {Array.from({ length: b.windows }, (_, w) => (
+                <View
+                  key={w}
+                  style={{
+                    width: 4,
+                    height: 5,
+                    backgroundColor: '#FFD98A',
+                    // Uneven so the block doesn't look like a switchboard.
+                    opacity: (seed + i * 5 + w * 3) % 5 === 0 ? 0.15 : 0.7,
+                  }}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+        </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mid-ground wall
+// ---------------------------------------------------------------------------
+
+/**
+ * The wall the Hood backs onto.
+ *
+ * Without it the ground plane runs straight into a distant skyline and the
+ * scene has no middle — everything is either at your feet or on the horizon.
+ * A wall gives the plane something to end against, and its pattern is most of
+ * what distinguishes a back alley from a garden.
+ *
+ * Sits inside the 1× scroll layer so it pans with the ground, which is what
+ * puts it in front of the 0.55× skyline.
+ */
+function MidWall({
+  dressing,
+  width,
+  topY,
+  dark,
+}: {
+  dressing: SceneDressing;
+  width: number;
+  topY: number;
+  dark: boolean;
+}) {
+  const { wall, seam, wallStyle, wallHeight } = dressing;
+  if (wallStyle === 'none' || wallHeight <= 0) return null;
+
+  const top = topY - wallHeight;
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: 0,
+        width,
+        top,
+        height: wallHeight,
+        backgroundColor: wall,
+        overflow: 'hidden',
+      }}
+    >
+      {wallStyle === 'brick' &&
+        // Courses offset by half a brick on alternate rows. At this size the
+        // mortar lines are the whole read — the individual bricks are not.
+        Array.from({ length: Math.ceil(wallHeight / 12) }, (_, row) => (
+          <View key={row} style={{ position: 'absolute', left: 0, right: 0, top: row * 12 }}>
+            <View style={{ height: 1.5, backgroundColor: seam, opacity: 0.85 }} />
+            {Array.from({ length: Math.ceil(width / 26) + 1 }, (_, col) => {
+              /**
+               * Shade the odd brick darker or lighter.
+               *
+               * Uniform brick is the giveaway: a real wall is laid from bricks
+               * that were fired in different batches, and the eye reads that
+               * variation long before it reads the mortar pattern. One in
+               * three or so gets a tint, deterministically, so a Hood keeps
+               * the same wall every visit.
+               */
+              const n = (row * 31 + col * 17) % 9;
+              const tint = n === 0 ? '#000000' : n === 4 ? '#FFFFFF' : null;
+              return (
+                <React.Fragment key={col}>
+                  {tint && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 26 + (row % 2 ? 13 : 0) + 1.5,
+                        top: 1.5,
+                        width: 24.5,
+                        height: 10,
+                        backgroundColor: tint,
+                        opacity: tint === '#000000' ? 0.07 : 0.05,
+                      }}
+                    />
+                  )}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: col * 26 + (row % 2 ? 13 : 0),
+                      top: 1,
+                      width: 1.5,
+                      height: 11,
+                      backgroundColor: seam,
+                      opacity: 0.7,
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
+          </View>
+        ))}
+
+      {wallStyle === 'planks' &&
+        // Seam lines alone make a fence look printed. Timber is cut from
+        // different boards and weathers unevenly, so a share of the planks
+        // carry their own tone, and a few carry grain or a knot. Only the
+        // selected planks get extra views, the way the brick wall does.
+        Array.from({ length: Math.ceil(width / 22) + 1 }, (_, col) => {
+          const v = hashIndex(col, 11);
+          return (
+            <React.Fragment key={col}>
+              {v > 0.28 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 1.5,
+                    top: 0,
+                    width: 20.5,
+                    height: wallHeight,
+                    backgroundColor: v > 0.64 ? tint(wall, 0.5) : shade(wall, 0.5),
+                    opacity: 0.05 + v * 0.07,
+                  }}
+                />
+              )}
+              {v > 0.5 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 5 + v * 9,
+                    top: wallHeight * (0.1 + v * 0.25),
+                    width: 1,
+                    height: wallHeight * 0.34,
+                    backgroundColor: shade(wall, 0.5),
+                    opacity: 0.22,
+                  }}
+                />
+              )}
+              {v > 0.84 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: col * 22 + 8,
+                    top: wallHeight * (0.3 + v * 0.35),
+                    width: 5,
+                    height: 4,
+                    borderRadius: 3,
+                    backgroundColor: shade(wall, 0.55),
+                    opacity: 0.34,
+                  }}
+                />
+              )}
+              <View
+                style={{
+                  position: 'absolute',
+                  left: col * 22,
+                  top: 0,
+                  width: 1.5,
+                  height: wallHeight,
+                  backgroundColor: seam,
+                  opacity: 0.7,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
+
+      {wallStyle === 'tile' &&
+        Array.from({ length: Math.ceil(wallHeight / 20) }, (_, row) => (
+          <View key={row} style={{ position: 'absolute', left: 0, right: 0, top: row * 20 }}>
+            <View style={{ height: 1.5, backgroundColor: seam, opacity: 0.6 }} />
+            {Array.from({ length: Math.ceil(width / 20) + 1 }, (_, col) => {
+              /**
+               * Glazed tile is the one surface where UNEVENNESS is the whole
+               * character: no two fire the same, and the glaze throws a
+               * highlight that moves tile to tile. A perfect grid of one
+               * colour reads as graph paper, which is what this was.
+               */
+              const v = hashIndex(row * 37 + col, 5);
+              return (
+                <React.Fragment key={col}>
+                  {v > 0.3 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 20 + 1.5,
+                        top: 1.5,
+                        width: 18.5,
+                        height: 18.5,
+                        backgroundColor: v > 0.65 ? tint(wall, 0.6) : shade(wall, 0.4),
+                        opacity: 0.04 + v * 0.07,
+                      }}
+                    />
+                  )}
+                  {v > 0.72 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: col * 20 + 4,
+                        top: 3,
+                        width: 3.5,
+                        height: 15,
+                        backgroundColor: '#FFFFFF',
+                        opacity: 0.11,
+                        transform: [{ rotate: '24deg' }],
+                      }}
+                    />
+                  )}
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: col * 20,
+                      top: 1,
+                      width: 1.5,
+                      height: 19,
+                      backgroundColor: seam,
+                      opacity: 0.5,
+                    }}
+                  />
+                </React.Fragment>
+              );
+            })}
+          </View>
+        ))}
+
+      {wallStyle === 'concrete' && (
+        <>
+          {/* Concrete is cast in panels, and no two cure the same colour.
+              One scored line across a flat slab was the entire texture here,
+              which is why the rooftop parapet read as grey card. The streaks
+              are rain washing dirt down from the coping — the thing that
+              actually dates a concrete wall. */}
+          {Array.from({ length: Math.ceil(width / 86) + 1 }, (_, i) => {
+            const v = hashIndex(i, 17);
+            return (
+              <React.Fragment key={i}>
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: i * 86,
+                    top: 0,
+                    width: 86,
+                    height: wallHeight,
+                    backgroundColor: v > 0.5 ? tint(wall, 0.5) : shade(wall, 0.45),
+                    opacity: 0.03 + v * 0.06,
+                  }}
+                />
+                {v > 0.42 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: i * 86 + 12 + v * 46,
+                      top: 0,
+                      width: 5 + v * 11,
+                      height: wallHeight * (0.35 + v * 0.55),
+                      backgroundColor: shade(wall, 0.6),
+                      opacity: 0.07,
+                    }}
+                  />
+                )}
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: i * 86,
+                    top: 0,
+                    width: 2,
+                    height: wallHeight,
+                    backgroundColor: seam,
+                    opacity: 0.4,
+                  }}
+                />
+              </React.Fragment>
+            );
+          })}
+          <View style={{ position: 'absolute', left: 0, right: 0, top: 6, height: 2, backgroundColor: seam, opacity: 0.5 }} />
+        </>
+      )}
+
+      {wallStyle === 'hedge' && (
+        <>
+          {/* The lumpy top edge was doing all the work, and below it the
+              hedge was a flat green rectangle. Foliage is clumps catching
+              light at different angles; without that it is a painted fence
+              with a bumpy top. Forty clumps is where it stops reading as
+              scattered dots and starts reading as a mass. */}
+          {Array.from({ length: 40 }, (_, i) => {
+            const u = hashIndex(i, 23);
+            const v = hashIndex(i, 29);
+            return (
+              <View
+                key={`c${i}`}
+                style={{
+                  position: 'absolute',
+                  left: u * width - 10,
+                  top: v * wallHeight - 8,
+                  width: 16 + v * 14,
+                  height: 13 + u * 11,
+                  borderRadius: 999,
+                  backgroundColor: v > 0.5 ? tint(wall, 0.3) : shade(wall, 0.35),
+                  opacity: 0.3,
+                }}
+              />
+            );
+          })}
+          {/* Lumpy top edge, drawn as overlapping discs. */}
+          {Array.from({ length: Math.ceil(width / 18) + 1 }, (_, i) => (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                left: i * 18 - 6,
+                top: -8 + (i % 3) * 3,
+                width: 24,
+                height: 22,
+                borderRadius: 12,
+                backgroundColor: i % 3 === 1 ? tint(wall, 0.16) : wall,
+              }}
+            />
+          ))}
+        </>
+      )}
+
+      {/* Coping along the top and a grimy band at the base — the two cues that
+          make a flat rectangle read as a built surface. */}
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 4,
+          backgroundColor: seam,
+          opacity: 0.9,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 10,
+          backgroundColor: dark ? '#000000' : '#2C2A29',
+          opacity: 0.16,
+        }}
+      />
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ground dressing
+// ---------------------------------------------------------------------------
+
+/**
+ * Scatter across the plane — tufts, grit, a stray leaf.
+ *
+ * A flat colour field with three opacity bands over it reads as a placeholder,
+ * and the hard edges of those bands read as a bug. Deterministic scatter costs
+ * nothing and is the difference between "a green rectangle" and "ground".
+ */
+function GroundDressing({
+  seed,
+  width,
+  height,
+  tint,
+  base,
+  style,
+  dark,
+}: {
+  seed: number;
+  width: number;
+  height: number;
+  tint: string;
+  /** Ground base colour, so blades can be lit against it. */
+  base: string;
+  style: GroundStyle;
+  dark: boolean;
+}) {
+  const bits = useMemo(() => {
+    const out: { x: number; y: number; w: number; h: number; o: number }[] = [];
+    for (let i = 0; i < 90; i++) {
+      const r1 = ((seed ^ Math.imul(i + 3, 0x9e3779b1)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 11, 0x85ebca6b)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 23, 0xc2b2ae35)) >>> 8) / 0xffffff;
+      // Denser toward the viewer, matching how detail resolves with distance.
+      const d = r2 * r2;
+      out.push({
+        x: r1 * width,
+        y: d * height,
+        w: 2 + Math.round(r3 * 5 * (0.4 + d)),
+        h: 2 + Math.round(r3 * 2),
+        o: 0.05 + r3 * 0.12,
+      });
+    }
+    return out;
+  }, [seed, width, height]);
+
+  /**
+   * Broad tonal patches, under the grit.
+   *
+   * Fine speckle alone cannot fix a large flat colour field — it adds detail at
+   * one frequency and leaves the low frequency untouched, so the ground still
+   * reads as one slab with dust on it. Real asphalt varies in big soft areas:
+   * where it was patched, where it stays wet, where the sun has bleached it.
+   * These are deliberately huge and nearly invisible individually; what they
+   * do is stop any two parts of the ground being the same colour.
+   */
+  const patches = useMemo(() => {
+    const out: { x: number; y: number; w: number; h: number; o: number; light: boolean }[] = [];
+    for (let i = 0; i < 10; i++) {
+      const r1 = ((seed ^ Math.imul(i + 31, 0x2545f491)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 47, 0x9e3779b9)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 59, 0x7feb352d)) >>> 8) / 0xffffff;
+      /**
+       * Very large and very faint, and built out of rings.
+       *
+       * Two attempts got this wrong. Small discs at 2-7% rendered as a field
+       * of grey coins — a hard-edged circle is a shape the eye names. Making
+       * them huge so the edge leaves the viewport only looked better: a
+       * rounded View is a flat fill, so an off-screen edge gives a uniform
+       * tint over everything, which is a different flat colour rather than
+       * variation. SoftBlob stacks rings to build the falloff a single View
+       * cannot have.
+       */
+      const w = width * (0.30 + r3 * 0.34);
+      out.push({
+        x: r1 * width - w / 2,
+        y: r2 * height - height * 0.25,
+        w,
+        h: height * (0.55 + r3 * 0.5),
+        o: 0.030 + r3 * 0.045,
+        light: r1 > 0.5,
+      });
+    }
+    return out;
+  }, [seed, width, height]);
+
+  /**
+   * Seams and cracks. Thin, long, mostly horizontal — asphalt joints run with
+   * the road, and a crack is the one piece of ground detail the eye reads as
+   * surface rather than as dirt.
+   */
+  const seams = useMemo(() => {
+    const out: { x: number; y: number; w: number; tilt: string }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const r1 = ((seed ^ Math.imul(i + 71, 0x85ebca77)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 83, 0xc2b2ae3d)) >>> 8) / 0xffffff;
+      out.push({
+        x: r1 * width,
+        y: 0.18 * height + r2 * height * 0.72,
+        w: width * (0.06 + r2 * 0.14),
+        tilt: `${(r1 - 0.5) * 7}deg`,
+      });
+    }
+    return out;
+  }, [seed, width, height]);
+
+  /**
+   * Grass, for the one environment that has any.
+   *
+   * A lawn is not a green rectangle with flecks on it — what reads as
+   * grass is thousands of near-vertical strokes, and the eye needs only a
+   * few dozen clumps of them to accept the rest. Each tuft fans three
+   * blades so it has a silhouette; a single stroke reads as a scratch.
+   * Nearer tufts are taller, on the same depth curve as the grit.
+   */
+  const tufts = useMemo(() => {
+    if (style !== 'grass') return [];
+    const out: { x: number; y: number; h: number; light: boolean }[] = [];
+    for (let i = 0; i < 72; i++) {
+      const r1 = ((seed ^ Math.imul(i + 97, 0x27d4eb2f)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 113, 0x165667b1)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 127, 0xd3a2646c)) >>> 8) / 0xffffff;
+      const d = r2 * r2;
+      out.push({ x: r1 * width, y: d * height, h: 5 + d * 11 + r3 * 4, light: r3 > 0.5 });
+    }
+    return out;
+  }, [seed, width, height, style]);
+
+  const blade = mixHex(base, '#FFF8EE', 0.26);
+
+  /**
+   * Loose ballast on the roof deck.
+   *
+   * The first attempt made the roof out of stones alone, and it could not
+   * work: the world is three viewports across, so even 150 of them come
+   * out one per few thousand square points — the eye reads that as dust
+   * on a slab, not as a surface made of stone. Covering it properly would
+   * take thousands of views.
+   *
+   * So the surface is the FELT below, which is a handful of long strips,
+   * and the stones are scattered on top as the loose ballast that has
+   * drifted across it. Few things, doing what few things can do.
+   */
+  const stones = useMemo(() => {
+    if (style !== 'roofdeck') return [];
+    const out: { x: number; y: number; r: number; light: boolean }[] = [];
+    for (let i = 0; i < 70; i++) {
+      const r1 = ((seed ^ Math.imul(i + 137, 0x2c1b3c6d)) >>> 8) / 0xffffff;
+      const r2 = ((seed ^ Math.imul(i + 149, 0x297a2d39)) >>> 8) / 0xffffff;
+      const r3 = ((seed ^ Math.imul(i + 163, 0x1b56c4e9)) >>> 8) / 0xffffff;
+      const d = r2 * r2;
+      out.push({ x: r1 * width, y: d * height, r: 1.1 + d * 1.7 + r3 * 1.2, light: r3 > 0.45 });
+    }
+    return out;
+  }, [seed, width, height, style]);
+
+  const stoneLight = mixHex(base, '#FFF8EE', 0.34);
+  const stoneDark = mixHex(base, '#2A211A', 0.30);
+
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
+      {/* Low frequency first, so grit and cracks sit on top of the mottling. */}
+      {patches.map((p, i) => (
+        <SoftBlob
+          key={`p${i}`}
+          left={p.x}
+          top={p.y}
+          width={p.w}
+          height={p.h}
+          colour={p.light ? '#FFFFFF' : '#000000'}
+          peak={dark ? p.o * 0.65 : p.o}
+          rings={6}
+        />
+      ))}
+      {style === 'asphalt' && seams.map((s, i) => (
+        <View
+          key={`s${i}`}
+          style={{
+            position: 'absolute',
+            left: s.x,
+            top: s.y,
+            width: s.w,
+            height: 1.5,
+            backgroundColor: '#000000',
+            opacity: dark ? 0.10 : 0.13,
+            transform: [{ rotate: s.tilt }],
+          }}
+        />
+      ))}
+      {style === 'roofdeck' &&
+        /**
+         * Roofing felt, laid in overlapping strips.
+         *
+         * The lap lines run across the roof, and because they recede they
+         * bunch toward the horizon — that spacing IS the perspective cue,
+         * and it is what says "flat roof" before any other detail lands.
+         * Each strip is a shade off its neighbour, the way rolls off
+         * different batches never quite match.
+         */
+        Array.from({ length: 9 }, (_, i) => {
+          const y = height * Math.pow(i / 9, 1.7);
+          const next = height * Math.pow((i + 1) / 9, 1.7);
+          return (
+            <React.Fragment key={`felt${i}`}>
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: y,
+                  width,
+                  height: next - y,
+                  backgroundColor: i % 2 ? '#FFFFFF' : '#000000',
+                  opacity: 0.022,
+                }}
+              />
+              <View
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  top: y,
+                  width,
+                  height: 1.5,
+                  backgroundColor: '#000000',
+                  opacity: dark ? 0.12 : 0.16,
+                }}
+              />
+            </React.Fragment>
+          );
+        })}
+      {stones.map((st, i) => (
+        <View
+          key={`g${i}`}
+          style={{
+            position: 'absolute',
+            left: st.x,
+            top: st.y,
+            width: st.r * 2,
+            height: st.r * 1.6,
+            borderRadius: 999,
+            backgroundColor: st.light ? stoneLight : stoneDark,
+            opacity: dark ? 0.38 : 0.55,
+          }}
+        />
+      ))}
+      {tufts.map((t, i) => (
+        <View key={`t${i}`} style={{ position: 'absolute', left: t.x, top: t.y }}>
+          {[-15, 0, 15].map((deg, j) => (
+            <View
+              key={j}
+              style={{
+                position: 'absolute',
+                left: j * 2.5,
+                bottom: 0,
+                width: 1.5,
+                height: j === 1 ? t.h : t.h * 0.72,
+                backgroundColor: t.light ? blade : tint,
+                opacity: dark ? 0.26 : 0.4,
+                transform: [{ rotate: `${deg}deg` }],
+              }}
+            />
+          ))}
+        </View>
+      ))}
+      {bits.map((b, i) => (
+        <View
+          key={i}
+          style={{
+            position: 'absolute',
+            left: b.x,
+            top: b.y,
+            width: b.w,
+            height: b.h,
+            borderRadius: 1,
+            backgroundColor: tint,
+            opacity: dark ? b.o * 0.7 : b.o,
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contact shadow
+// ---------------------------------------------------------------------------
+
+/**
+ * A soft ellipse where a sprite meets the ground.
+ *
+ * Does more work than it looks like: without it, a depth-scaled sprite reads as
+ * floating at an arbitrary size rather than standing further away. It is the
+ * cheapest possible grounding cue and the one the old canvas was missing.
+ */
+function ContactShadow({ size, dark }: { size: number; dark: boolean }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        bottom: size * 0.06,
+        alignSelf: 'center',
+        width: size * 0.5,
+        height: size * 0.11,
+        borderRadius: size * 0.25,
+        backgroundColor: dark ? 'rgba(6,8,20,0.38)' : 'rgba(48,40,30,0.17)',
+      }}
+    />
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Actors
+// ---------------------------------------------------------------------------
+
+/**
+ * One visiting cat, with a life of its own.
+ *
+ * The actor box is positioned from the scene's static placement and then
+ * translated by whatever useCatLife is doing, so the layout stays pure and the
+ * wandering is a presentation concern laid over it. That separation is worth
+ * keeping: layoutScene remains testable without a clock, and a cat that walks
+ * off somewhere unexpected is a bug in exactly one module.
+ */
+function SceneCat({
+  placement,
+  spriteId,
+  size,
+  left,
+  top,
+  dark,
+  asleep,
+  seed,
+  worldWidth,
+  sceneHeight,
+  alive,
+  onPress,
+}: {
+  placement: CatPlacement;
+  spriteId?: string;
+  size: number;
+  left: number;
+  top: number;
+  dark: boolean;
+  asleep: boolean;
+  seed: number;
+  worldWidth: number;
+  sceneHeight: number;
+  /** Friend Hoods and unmeasured scenes hold still. */
+  alive: boolean;
+  onPress: () => void;
+}) {
+  const { activity, transform, depth, opacity } = useCatLife({
+    seed,
+    slot: placement.slot,
+    baseDepth: placement.z,
+    baseX: placement.x,
+    worldWidth,
+    sceneHeight,
+    asleep,
+    // What it came for, which decides what it does while it is here.
+    atItemId: placement.atItemId,
+    enabled: alive,
+  });
+
+  return (
+    /**
+     * Two boxes, because two different things want to transform this cat.
+     *
+     * The outer one carries the drift, natively driven. The inner one carries
+     * the press feedback. Putting both on one box means whichever writes
+     * `transform` last wins — and since the press style is applied on top, a
+     * tap would snap a walking cat back to its starting spot for as long as
+     * the finger was down.
+     */
+    <Animated.View
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        zIndex: Math.round(depth * 1000),
+        transform,
+        opacity,
+      }}
+    >
+      <Touchable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel="A visiting cat"
+        // Scales UP, not down. The whole actor including its shadow, so the
+        // press reads as the cat reacting rather than the sprite detaching
+        // from the ground — and up rather than in, because a cat you poke
+        // should perk toward you, not shrink away.
+        scaleTo={1.07}
+        style={{
+          width: size,
+          height: size,
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+        }}
+      >
+        <ContactShadow size={size} dark={dark} />
+        {spriteId ? (
+          activity.kind === 'walking' ? (
+            <WalkingCatSprite
+              spriteId={spriteId}
+              size={size}
+              direction={activity.direction}
+              animation={activity.animation}
+              phase={placement.slot}
+            />
+          ) : (
+            <SettledCatSprite
+              spriteId={spriteId}
+              size={size}
+              animation={activity.animation}
+              phase={placement.slot}
+            />
+          )
+        ) : (
+          <Text style={{ fontSize: size * 0.78, textAlign: 'center' }}>🐱</Text>
+        )}
+        {asleep && (
+          <Text
+            style={{
+              position: 'absolute',
+              top: -size * 0.02,
+              right: -size * 0.02,
+              fontSize: size * 0.2,
+              opacity: 0.9,
+            }}
+          >
+            💤
+          </Text>
+        )}
+      </Touchable>
+    </Animated.View>
+  );
+}
+
+/**
+ * Idle motion for a goodie that is meant to move — a chime swaying, a laser
+ * dot hovering.
+ *
+ * Returns a transform array rather than wrapping the prop, so the caller keeps
+ * control of where the prop sits and this only ever contributes movement.
+ * `still` props get an empty array and no animation is started at all, which
+ * matters because most of the twenty-five are still.
+ */
+/** The motion half, taking a PropMotion directly so scenery can use it too. */
+function useDrift(motion: PropMotion, phase: number, animate = true) {
+  const t = useRef(new Animated.Value(0)).current;
+  const animated = animate && motion.kind !== 'still';
+
+  useEffect(() => {
+    if (!animated) return undefined;
+    // Start part-way through so two of the same prop in one Hood are never in
+    // step. Seeding the value rather than delaying the start is fine here —
+    // unlike a sprite's frame loop, a sine has no frames to clip.
+    t.setValue((phase % 7) / 7);
+    const loop = Animated.loop(
+      Animated.timing(t, {
+        toValue: 1,
+        duration: motion.periodMs,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t, animated, motion, phase]);
+
+  return useMemo(() => {
+    if (motion.kind === 'still') return [];
+    // Four stops make a round trip that eases at the extremes, which is what a
+    // pendulum does; a two-stop ramp reads as a conveyor belt.
+    const swing = [0, motion.amplitude, 0, -motion.amplitude, 0];
+    const value = t.interpolate({
+      inputRange: [0, 0.25, 0.5, 0.75, 1],
+      outputRange: swing,
+    });
+    return motion.kind === 'sway' ? [{ translateX: value }] : [{ translateY: value }];
+  }, [motion, t]);
+}
+
+function usePropDrift(itemId: string, phase: number) {
+  const motion = useMemo(() => propMotion(itemId), [itemId]);
+  return useDrift(motion, phase);
+}
+
+const STILL_MOTION: PropMotion = { kind: 'still' };
+
+/**
+ * A piece of the environment, and the one thing in the Hood that answers
+ * back without changing anything.
+ *
+ * Tapping scenery does not place, remove, buy or score — it wobbles and
+ * tells you something about the neighbourhood. That is the whole point:
+ * a world where the only touchable things are the ones with a number
+ * attached is a menu with a picture behind it. The reward for poking the
+ * bin is finding out somebody keeps knocking the lid off.
+ */
+function SceneryItem({
+  prop, size, left, top, dark, paused, onPoke,
+}: {
+  prop: SceneryProp;
+  size: number;
+  left: number;
+  top: number;
+  dark: boolean;
+  paused: boolean;
+  onPoke: (line: string) => void;
+}) {
+  const art = getPropSheet(prop.id);
+  const drift = useDrift(prop.motion ?? STILL_MOTION, Math.round(prop.u * 100), !paused);
+
+  /**
+   * Atmospheric recession.
+   *
+   * Scenery sits between depth 0.10 and 0.26 and was being drawn at full
+   * contrast with the same hard keyline as a cat standing at the front of
+   * the plane — which is most of why it read as stickers laid on the
+   * ground rather than as part of the place. Letting a little of the
+   * ground through softens the keyline and pushes it back, for the price
+   * of one number. Same principle as the hazed skyline rows.
+   */
+  // Measured, 0.84 + depth*0.5 gave 0.89 at the far end and 0.97 at the near
+  // one — an eight-point spread that moved the keyline by one to three points
+  // of value. Invisible. The range has to be wide enough to see.
+  const recede = 0.72 + Math.min(prop.depth, 0.3) * 0.67;
+
+  const nudge = useRef(new Animated.Value(0)).current;
+
+
+  const poke = useCallback(() => {
+    // A knock, not a bounce. Scenery is heavy and bolted down.
+    nudge.setValue(0);
+    Animated.sequence([
+      Animated.timing(nudge, { toValue: -3, duration: 90, useNativeDriver: true }),
+      Animated.spring(nudge, { toValue: 0, tension: 180, friction: 5, useNativeDriver: true }),
+    ]).start();
+
+    onPoke(prop.line);
+  }, [nudge, onPoke, prop.line]);
+
+  if (!art) return null;
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        zIndex: Math.round(prop.depth * 1000),
+      }}
+    >
+      <Touchable
+        onPress={poke}
+        accessibilityRole="button"
+        accessibilityLabel={prop.line}
+        scaleTo={0.94}
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}
+      >
+        <ContactShadow size={size} dark={dark} />
+        <Animated.Image
+          source={art}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={{
+            width: size,
+            height: size,
+            opacity: recede,
+            transform: [...drift, { translateY: nudge }],
+          }}
+        />
+      </Touchable>
+    </View>
+  );
+}
+
+function SceneItem({
+  placement,
+  size,
+  left,
+  top,
+  dark,
+  animate,
+  onPress,
+}: {
+  placement: ItemPlacement;
+  size: number;
+  left: number;
+  top: number;
+  dark: boolean;
+  /** False while the scene is covered — stops lantern flicker. */
+  animate: boolean;
+  /** Absent on read-only Hoods. */
+  onPress?: () => void;
+}) {
+  const drift = usePropDrift(placement.itemId, Math.round(placement.x * 100));
+  const light = useMemo(() => propLight(placement.itemId), [placement.itemId]);
+  const def = PLACEABLE_ITEMS.find((i) => i.item_id === placement.itemId);
+  if (!def) return null;
+
+  const art = getPropSheet(placement.itemId);
+
+  const body = (
+    <>
+      {/* Under the prop and under its shadow, so the prop reads as the source
+          of the light rather than as something sitting in it. */}
+      {dark && light && (
+        <LightPool
+          size={size}
+          colour={light.color}
+          spread={light.spread}
+          flicker={light.flicker}
+          phase={Math.round(placement.x * 100)}
+          animate={animate}
+        />
+      )}
+      <ContactShadow size={size} dark={dark} />
+      {art ? (
+        <Animated.Image
+          source={art}
+          // Nearest-neighbour is the whole point: the sheets ship pre-upscaled
+          // 4×, and letting the GPU smooth them would blur the keyline that
+          // makes props sit with the cats.
+          resizeMode="contain"
+          fadeDuration={0}
+          style={{ width: size, height: size, transform: drift }}
+        />
+      ) : (
+        // Only reachable if an item ships without authored art.
+        <Text style={{ fontSize: size * 0.4 }}>{def.emoji}</Text>
+      )}
+    </>
+  );
+
+  const frame: ViewStyle = {
+    position: 'absolute',
+    left,
+    top,
+    width: size,
+    height: size,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    zIndex: Math.round(placement.z * 1000),
+  };
+
+  // Picking an item back up by tapping it in the scene is what let the item
+  // tray drop its +/− steppers. Acting on the object itself is both more direct
+  // and one less widget on screen.
+  if (!onPress) {
+    return (
+      <View pointerEvents="none" style={frame}>
+        {body}
+      </View>
+    );
+  }
+
+  return (
+    <Touchable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${def.label} — tap to put away`}
+      // Presses in and dims — it is about to be picked up and put away.
+      scaleTo={0.9}
+      pressedStyle={{ opacity: 0.75 }}
+      style={frame}
+    >
+      {body}
+    </Touchable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ambience
+// ---------------------------------------------------------------------------
+
+/**
+ * The sun or moon, with the glow it throws into the sky around it.
+ *
+ * The glow is what stops it reading as a sticker. A flat disc on a banded
+ * gradient is the single most obviously-drawn thing in a sky.
+ *
+ * This had two rings behind it, which was the right idea and not enough of
+ * it: the outer ring stepped from nothing to 7% in one go, so the halo had
+ * a rim. A halo with a rim is a drawn circle. SoftBlob spreads the same
+ * light over enough rings that there is no step to find.
+ */
+function Luminary({ dark, left, top }: { dark: boolean; left: number; top: number }) {
+  const size = dark ? 38 : 52;
+  const colour = dark ? '#EFF1FF' : '#FFF0BE';
+
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left, top }}>
+      <SoftBlob
+        left={-(size * 1.7) / 2}
+        top={-(size * 1.7) / 2}
+        width={size * 2.7}
+        height={size * 2.7}
+        colour={colour}
+        peak={dark ? 0.16 : 0.26}
+        rings={8}
+      />
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: colour,
+          opacity: dark ? 0.92 : 0.85,
+        }}
+      />
+    </View>
+  );
+}
+
+/**
+ * A vacant anchor, offered.
+ *
+ * Deliberately the same dashed warm ring the apartment uses for its empty
+ * slots: the two screens are the same game, and a player who has learnt
+ * what a dashed ring means indoors should not have to learn it again
+ * outside. It breathes, because a static dotted circle on a busy ground
+ * plane reads as scenery rather than as something you can press.
+ */
+function SceneSpot({
+  size, left, top, dark, onPress,
+}: {
+  size: number; left: number; top: number; dark: boolean; onPress: () => void;
+}) {
+  const pulse = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.6, duration: 1100, useNativeDriver: true }),
+      ]),
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [pulse]);
+
+  // Spots scale with depth like everything else on the plane, but a
+  // target still has to be hittable: the ring shrinks, the touch area
+  // does not go below a thumb.
+  const ring = Math.max(26, size * 0.62);
+  const pad = Math.max(0, (44 - ring) / 2);
+
+  return (
+    <Touchable
+      onPress={onPress}
+      hitSlop={{ top: pad, bottom: pad, left: pad, right: pad }}
+      scaleTo={0.9}
+      style={{ position: 'absolute', left, top: top + size * 0.42 }}
+    >
+      <Animated.View
+        style={{
+          width: ring,
+          height: ring,
+          borderRadius: ring / 2,
+          borderWidth: 2.5,
+          borderStyle: 'dashed',
+          // Asphalt is a mid grey and the first pass put a 40%-opacity warm
+          // ring on it, which disappeared into the ground. An invitation has
+          // to out-contrast what it sits on.
+          borderColor: dark ? 'rgba(255,255,255,0.8)' : '#FF7A38',
+          backgroundColor: dark ? 'rgba(255,255,255,0.12)' : 'rgba(255,240,230,0.72)',
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pulse,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: Math.max(13, ring * 0.42),
+            fontFamily: font.medium,
+            color: dark ? 'rgba(255,255,255,0.85)' : '#E67035',
+          }}
+        >
+          +
+        </Text>
+      </Animated.View>
+    </Touchable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// HoodScene
+// ---------------------------------------------------------------------------
+
+export interface HoodSceneProps {
+  /** Seeds the anchor lattice and the skyline. Same Hood ⇒ same scene. */
+  hoodId: string;
+  placedItems: string[];
+  /** How many cats are visiting. Clamped to MAX_HOOD_CATS here as a backstop. */
+  expectedCats: number;
+  time: TimeOfDay;
+  /** Sprite template ids for the visiting cats, newest first. */
+  spriteIds?: string[];
+  /** Sprite ids are still resolving — hold the scene empty rather than flash. */
+  spritesLoading?: boolean;
+  /** Theme overrides for sky and ground. Time of day still tints the result. */
+  themeColors?: { skyTop: string; skyBottom: string; ground: string; accent: string };
+  /**
+   * Which environment's set dressing to draw — ground material and the wall
+   * along the horizon. This is what makes a Back Alley read differently from a
+   * Garden rather than being the same field with a different label.
+   */
+  envId?: string | null;
+  /** Tapping a cat opens its Field Note. */
+  onPressCat?: (slot: number, spriteId: string | undefined, atItemId: string | null) => void;
+  /** Tapping a placed item picks it back up. */
+  onPressItem?: (itemId: string) => void;
+  /** Tapping a vacant spot on the plane — opens the item picker. */
+  onPressSpot?: (anchorId: string) => void;
+  /** anchorId → itemId for items the player placed at a chosen spot. */
+  itemAnchors?: Record<string, string>;
+  /** Read-only friend Hoods suppress interaction. */
+  readOnly?: boolean;
+  /**
+   * Covered by another screen. The scene stays mounted — rebuilding it
+   * is what made coming back slow — but it stops animating, because six
+   * schedulers and a parallax layer running behind an opaque catalog is
+   * work nobody can see.
+   */
+  paused?: boolean;
+}
+
+export function HoodScene({
+  hoodId,
+  placedItems,
+  expectedCats,
+  time,
+  spriteIds,
+  spritesLoading = false,
+  themeColors,
+  envId,
+  onPressCat,
+  onPressItem,
+  onPressSpot,
+  itemAnchors,
+  readOnly = false,
+  paused = false,
+}: HoodSceneProps) {
+  const [box, setBox] = useState({ width: 0, height: 0 });
+  const dark = isDark(time);
+  const palette = skyPalette(time);
+  const dressing = useMemo(() => getDressing(envId), [envId]);
+  const seed = useMemo(() => hashSeed(hoodId), [hoodId]);
+
+  /** Camera position, driven natively by the pan so parallax costs no JS. */
+  const scrollX = useRef(new Animated.Value(0)).current;
+
+  // The architectural cap is enforced in the layout call, not just upstream:
+  // this component is reachable from the friend viewer too, and a bad document
+  // should not be able to put 30 sprites on screen.
+  const catCount = Math.max(0, Math.min(MAX_HOOD_CATS, expectedCats));
+
+  const layout = useMemo(
+    () => layoutScene({ hoodId, placedItems, catCount: spritesLoading ? 0 : catCount, pinned: itemAnchors }),
+    [hoodId, placedItems, catCount, spritesLoading, itemAnchors],
+  );
+
+  const actors = useMemo(() => paintOrder(layout), [layout]);
+
+  const scenery = useMemo(() => sceneryFor(envId), [envId]);
+
+  /**
+   * The line the last-tapped piece of scenery is saying.
+   *
+   * Held here rather than inside the prop, and drawn OUTSIDE the scrolling
+   * world, because a caption parented to its prop pans with it: the first
+   * attempt clipped off the side of the screen, and clamping it into the
+   * world did not help — the prop was near the edge of the VIEW, not of
+   * the world, and the two move independently. A caption that slides away
+   * while you read it is worse than one that cannot fit.
+   */
+  const [sceneryLine, setSceneryLine] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sceneryLine == null) return undefined;
+    const t = setTimeout(() => setSceneryLine(null), 2600);
+    return () => clearTimeout(t);
+  }, [sceneryLine]);
+
+  // Theme wins on the two colours it defines; the rest of the palette still
+  // comes from the clock, so a themed Hood reads differently at night.
+  const skyTop = themeColors?.skyTop ?? palette.top;
+  const skyLow = dark ? palette.low : themeColors?.skyBottom ?? palette.low;
+  // A purchased Theme still wins — it is the thing the player paid for. With no
+  // Theme, the ground comes from the environment's material rather than from a
+  // single shared green.
+  const ground = themeColors?.ground ?? dressing.ground;
+
+  const handlePressCat = useCallback(
+    (placement: CatPlacement) => {
+      if (readOnly) return;
+      onPressCat?.(placement.slot, spriteIds?.[placement.slot], placement.atItemId);
+    },
+    [onPressCat, readOnly, spriteIds],
+  );
+
+  const { width: viewW, height } = box;
+  const worldW = viewW * WORLD_WIDTHS;
+  const horizonY = height * HORIZON;
+  const panRange = Math.max(1, worldW - viewW);
+
+  /** Layer offset for a given tracking rate. 1 would sit still relative to ground. */
+  const parallax = (rate: number) =>
+    scrollX.interpolate({
+      inputRange: [0, panRange],
+      outputRange: [0, -panRange * rate],
+      extrapolate: 'clamp',
+    });
+
+  return (
+    <View
+      style={{ flex: 1, overflow: 'hidden', backgroundColor: skyTop }}
+      onLayout={(e) => {
+        const { width: w, height: h } = e.nativeEvent.layout;
+        setBox((prev) => (prev.width === w && prev.height === h ? prev : { width: w, height: h }));
+      }}
+    >
+      {viewW > 0 && (
+        <>
+          {/* ── Sky: static, no detail to parallax ──────────────────────── */}
+          {Array.from({ length: SKY_BANDS }, (_, i) => {
+            const t = i / (SKY_BANDS - 1);
+            // Two-stop through the mid colour, so dusk keeps its warm horizon
+            // instead of averaging into mud.
+            const colour =
+              t < 0.5
+                ? mixHex(skyTop, palette.mid, t * 2)
+                : mixHex(palette.mid, skyLow, (t - 0.5) * 2);
+            return (
+              <View
+                key={i}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: (horizonY / SKY_BANDS) * i,
+                  height: horizonY / SKY_BANDS + 1,
+                  backgroundColor: colour,
+                }}
+              />
+            );
+          })}
+
+          {/* ── Far layer: sun/moon and drifting cloud ──────────────────── */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: worldW,
+              height: horizonY,
+              transform: [{ translateX: parallax(PARALLAX_SKY) }],
+            }}
+          >
+            {dark && <StarField width={worldW} horizonY={horizonY} seed={seed} animate={!paused} />}
+            {/* Parked below the top chrome, not behind it — at 0.16 of the
+                horizon the moon sat under the Hood-name pill. */}
+            <Luminary dark={dark} left={viewW * 0.66} top={horizonY * 0.4} />
+            <Clouds width={worldW} horizonY={horizonY} seed={seed} dark={dark} animate={!paused} />
+          </Animated.View>
+
+          {/* ── Far layer: the distant skyline, washed toward the sky.     */}
+          {/*    Two rows of buildings rather than one, at different rates: */}
+          {/*    a single silhouette parallaxing against the ground gives   */}
+          {/*    depth, but only one step of it, which is what made the     */}
+          {/*    backdrop read as a painted flat rather than as distance.   */}
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: worldW,
+              height: horizonY,
+              transform: [{ translateX: parallax(PARALLAX_FAR) }],
+            }}
+          >
+            <Backdrop
+              seed={seed ^ 0x5bf03635}
+              width={worldW}
+              horizonY={horizonY * 0.88}
+              colour={mixHex(palette.backdrop, palette.low, HAZE_FAR)}
+              lit={false}
+            />
+          </Animated.View>
+
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              top: 0,
+              width: worldW,
+              height: horizonY,
+              transform: [{ translateX: parallax(PARALLAX_BACKDROP) }],
+            }}
+          >
+            <Backdrop
+              seed={seed}
+              width={worldW}
+              horizonY={horizonY}
+              colour={mixHex(palette.backdrop, palette.low, HAZE_MID)}
+              lit={dark}
+            />
+          </Animated.View>
+
+          {/* ── Ground layer: pans 1:1, and carries everything touchable ── */}
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            // The world starts centred so there is somewhere to go in both
+            // directions — opening hard against the left edge makes half the
+            // Hood feel like an accident.
+            contentOffset={{ x: panRange / 2, y: 0 }}
+            style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }}
+            contentContainerStyle={{ width: worldW, height: '100%' }}
+            scrollEventThrottle={16}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+              useNativeDriver: true,
+            })}
+          >
+            <View style={{ width: worldW, height: '100%' }}>
+              {/* Wall first — the ground plane is painted over its base, which
+                  is what makes the two meet rather than merely abut. */}
+              <MidWall dressing={dressing} width={worldW} topY={horizonY} dark={dark} />
+
+              {/* Ground plane */}
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  width: worldW,
+                  top: horizonY,
+                  bottom: 0,
+                  backgroundColor: ground,
+                }}
+              >
+                {/* A single soft gradient toward the viewer instead of three
+                    banded strips — the bands' hard edges read as a bug. */}
+                {Array.from({ length: 8 }, (_, i) => (
+                  <View
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: ((height - horizonY) / 8) * i,
+                      height: (height - horizonY) / 8 + 1,
+                      backgroundColor: dark ? '#000000' : '#2C2A29',
+                      opacity: 0.055 * (1 - i / 8),
+                    }}
+                  />
+                ))}
+                <GroundDressing
+                  seed={seed}
+                  width={worldW}
+                  height={height - horizonY}
+                  tint={dressing.speckle}
+                  base={dressing.ground}
+                  style={dressing.groundStyle}
+                  dark={dark}
+                />
+                {/* Kerb where the ground meets the wall, plus the shadow the
+                    wall casts onto it. */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    height: 3,
+                    backgroundColor: dressing.seam,
+                    opacity: 0.8,
+                  }}
+                />
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: 3,
+                    height: 16,
+                    backgroundColor: dark ? '#000000' : '#2C2A29',
+                    opacity: 0.14,
+                  }}
+                />
+              </View>
+
+              {/* Air between the wall and the actors. Drawn before them so a
+                  cat always reads in front of the weather, and inside the 1x
+                  layer so motes pan with the ground they are settling onto. */}
+              <Motes
+                style={moteStyleFor(envId, dark)}
+                width={worldW}
+                height={height}
+                seed={seed}
+                animate={!paused}
+              />
+              {dark && dressing.wallStyle !== 'none' && (
+                <Fireflies width={worldW} height={height * 0.72} seed={seed} animate={!paused} />
+              )}
+
+              {/* Scenery. Fixed to the environment, painted before the
+                  actors and at its own depth, so a cat wandering to the
+                  back still passes in front of the bin rather than
+                  through it. */}
+              {scenery.map((prop, i) => {
+                const size = ACTOR_BASE_SIZE * planeScale(prop.depth) * (prop.scale ?? 1);
+                return (
+                  <SceneryItem
+                    key={`scenery${i}`}
+                    prop={prop}
+                    size={size}
+                    left={planeX(prop.u, prop.depth) * worldW - size / 2}
+                    top={planeY(prop.depth) * height - size}
+                    dark={dark}
+                    paused={paused}
+                    onPoke={setSceneryLine}
+                  />
+                );
+              })}
+
+              {/* Vacant spots, under the actors so a cat or an item
+                  always paints over the invitation rather than behind
+                  it. Hidden in a friend's Hood, which is a photograph. */}
+              {!readOnly && onPressSpot &&
+                layout.spots.map((spot) => {
+                  const size = ACTOR_BASE_SIZE * spot.scale;
+                  return (
+                    <SceneSpot
+                      key={spot.key}
+                      size={size}
+                      left={spot.x * worldW - size / 2}
+                      top={spot.y * height - size}
+                      dark={dark}
+                      onPress={() => onPressSpot(spot.anchorId)}
+                    />
+                  );
+                })}
+
+              {/* Actors, back to front */}
+              {actors.map((actor) => {
+                const p = actor.placement;
+                const size = ACTOR_BASE_SIZE * p.scale;
+                // x is a fraction of the WORLD; y is the sprite's BASE, so the
+                // box top sits one height above it.
+                const left = p.x * worldW - size / 2;
+                const top = p.y * height - size;
+
+                if (actor.kind === 'item') {
+                  const item = actor.placement;
+                  return (
+                    <SceneItem
+                      key={p.key}
+                      placement={item}
+                      size={size}
+                      left={left}
+                      top={top}
+                      dark={dark}
+                      animate={!paused}
+                      onPress={
+                        readOnly || !onPressItem ? undefined : () => onPressItem(item.itemId)
+                      }
+                    />
+                  );
+                }
+
+                const cat = actor.placement;
+                return (
+                  <SceneCat
+                    key={p.key}
+                    placement={cat}
+                    spriteId={spriteIds?.[cat.slot]}
+                    size={size}
+                    left={left}
+                    top={top}
+                    dark={dark}
+                    // Some cats doze after dark. Alternating by slot rather than
+                    // at random keeps it stable across re-renders — a cat that
+                    // flicks between awake and asleep looks broken, not sleepy.
+                    asleep={dark && cat.slot % 2 === 1}
+                    seed={seed}
+                    worldWidth={worldW}
+                    sceneHeight={height}
+                    // Someone else's Hood is a photograph, not a place you are
+                    // in: its cats breathe but do not wander off where the
+                    // viewer has no say in it.
+                    alive={!readOnly && !paused}
+                    onPress={() => handlePressCat(cat)}
+                  />
+                );
+              })}
+            </View>
+          </Animated.ScrollView>
+
+          {/* What a tapped piece of scenery had to say. Above the wash so
+              it stays legible after dark, and anchored to the view so it
+              holds still while the world behind it pans. */}
+          {sceneryLine != null && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                // Clear of the control row, which sits between 14% and 24%.
+                bottom: '28%',
+                alignItems: 'center',
+              }}
+            >
+              <View
+                style={{
+                  maxWidth: '86%',
+                  backgroundColor: dark ? 'rgba(22,20,30,0.92)' : 'rgba(250,246,240,0.96)',
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderWidth: 1,
+                  borderColor: dark ? 'rgba(255,255,255,0.14)' : 'rgba(44,42,41,0.10)',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    lineHeight: 17,
+                    fontFamily: font.medium,
+                    color: dark ? 'rgba(255,255,255,0.9)' : '#4A443F',
+                    textAlign: 'center',
+                  }}
+                >
+                  {sceneryLine}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* ── Wash ────────────────────────────────────────────────────── */}
+          <View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              top: 0,
+              bottom: 0,
+              backgroundColor: palette.wash,
+              opacity: palette.washOpacity,
+            }}
+          />
+        </>
+      )}
+    </View>
+  );
+}

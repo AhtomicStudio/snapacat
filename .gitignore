@@ -41,5 +41,16 @@ Thumbs.db
 .env
 .env.*
 
+# --- Third-party art reference (do not distribute) ---
+# Reference/ holds PMDCollab sprite sheets used only to study the format
+# (AnimData.xml + per-animation sheets + offset/shadow layers). They are
+# Nintendo-derived assets — fine to look at locally, not ours to ship.
+Reference/
+
 # --- Claude Code session-local settings ---
 .claude/settings.local.json
+
+# Seeded design-canvas output. ~2.3MB of editor payload regenerated from the
+# .dc.html sources next to it — the sources are what's worth versioning.
+design/*.html
+!design/*.dc.html

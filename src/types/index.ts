@@ -40,6 +40,43 @@ export interface Hood {
   active_theme_id?: string | null;
   /** Active environment preset ID for this Hood; null uses the default Back Alley. */
   active_environment_id?: string | null;
+  /** Notes and photos the player has kept about this neighbourhood. */
+  scrapbook?: HoodNote[] | null;
+}
+
+/**
+ * A page in a Hood's scrapbook.
+ *
+ * WHY THIS IS NOT A ScrapbookEntry
+ *
+ * A ScrapbookEntry is a SIGHTING: it belongs to a cat, it is created by
+ * logging one, and it records which Hood the cat was in. That answers
+ * "where have I seen this cat", which is what the Cat-a-log is for.
+ *
+ * It cannot answer "what is this neighbourhood like". There was nowhere to
+ * write that the tabby by the bins only shows up when it rains, or to keep
+ * a photo of the place rather than of a cat, because every note in the app
+ * had to hang off a cat. A HoodNote hangs off the Hood instead, so a Hood
+ * can accumulate a character of its own.
+ *
+ * Sightings still appear in the Hood's scrapbook — the screen merges them
+ * in by `hood_name` — they are simply not stored here.
+ */
+export interface HoodNote {
+  note_id: string;
+  /** When it was written. */
+  created_at: Timestamp;
+  /** The observation itself. */
+  text: string;
+  /**
+   * Local file URI of a photo pinned to the page.
+   *
+   * Deliberately a device URI and not an upload. Photos in this app are
+   * already local-only — the camera captures one, the palette is pulled
+   * from it, and it is discarded — and putting a storage bucket behind a
+   * scrapbook note is a much larger decision than the note is.
+   */
+  photo_uri?: string | null;
 }
 
 /** `users/{uid}` document. */

@@ -1,6 +1,4 @@
-// Bare React Native + NativeWind v4.
-// 'nativewind/babel' must come after the core RN preset so it can transform the
-// className -> style props on every component.
+// Bare React Native. NativeWind was removed -- see src/theme.ts for why.
 module.exports = {
-  presets: ['module:@react-native/babel-preset', 'nativewind/babel'],
+  presets: ['module:@react-native/babel-preset'],
 };

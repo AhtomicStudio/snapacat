@@ -41,19 +41,19 @@ export const SPRITE_TEMPLATE_COLORS: Record<string, HexColor[]> = {
   // Tier 1 — Wild-types
   brown_mackerel_tabby:  ['#C8945A', '#4A2810', '#E4BC88'],
   brown_classic_tabby:   ['#C08048', '#3C2010', '#D4A870'],
-  grey_mackerel_tabby:   ['#ACACAC', '#404040', '#D0D0D0'],
+  grey_mackerel_tabby:   ['#B4BCC8', '#3C424E', '#DCE0E8'],
   orange_mackerel_tabby: ['#E87830', '#B84010', '#FFD0A0'],
   // Tier 2 — White-spotted tabbies
   brown_tabby_white:     ['#C08040', '#F0F0F0', '#4A2810'],
-  grey_tabby_white:      ['#989898', '#F0F0F0', '#404040'],
+  grey_tabby_white:      ['#9A9A9A', '#F0F0F0', '#404040'],
   orange_tabby_white:    ['#E87030', '#F0F0F0', '#B83C08'],
   // Tier 3 — Solids
   solid_black:           ['#101010', '#242424', '#FF9E9A'],
-  solid_grey:            ['#888888', '#ACACAC', '#606060'],
+  solid_grey:            ['#6E7278', '#94989E', '#4E5258'],
   solid_white:           ['#F8F8F8', '#DCDCDC', '#FF9E9A'],
   // Tier 4 — Solid bicolors
   black_tuxedo:          ['#141414', '#F2F2F2', '#FF9E9A'],
-  grey_tuxedo:           ['#787878', '#F2F2F2', '#484848'],
+  grey_tuxedo:           ['#5A5D64', '#F2F2F2', '#3A3D42'],
   cow_cat:               ['#F5F5F5', '#101010', '#808080'],
   // Tier 5 — Sex-linked multi-colors
   tortoiseshell:         ['#B84A20', '#181210', '#C87820'],
