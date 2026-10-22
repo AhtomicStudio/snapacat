@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Animated,
   BackHandler,
+  StyleSheet,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { CatalogScreen } from './src/screens/CatalogScreen';
@@ -14,12 +15,14 @@ import { HoodHomeScreen } from './src/screens/HoodHomeScreen';
 import { FriendHoodScreen } from './src/screens/FriendHoodScreen';
 import { FriendsScreen } from './src/screens/FriendsScreen';
 import { ScrapbookScreen } from './src/screens/ScrapbookScreen';
+import { HoodScrapbookScreen } from './src/screens/HoodScrapbookScreen';
 import { CameraScreen } from './src/screens/CameraScreen';
 import { SpriteRevealScreen } from './src/screens/SpriteRevealScreen';
 import type { HexColor } from './src/utils/colorExtractor';
 import {
   getUser,
   updateHoodLayout,
+  updateHoodScrapbook,
   getUserProgression,
   saveUserProgression,
   createHood,
@@ -55,11 +58,18 @@ type ScreenState =
   | { type: 'hood' }
   | { type: 'catalog' }
   | { type: 'friends' }
-  | { type: 'camera' }
+  /**
+   * `returnTo` is how the camera knows it was opened from somewhere other
+   * than the sighting flow. Without it the only way back was into Field
+   * Notes, which is wrong when the player was part-way through writing a
+   * scrapbook note and just wanted a picture of the place.
+   */
+  | { type: 'camera'; returnTo?: 'hood_scrapbook' }
   | { type: 'sprite_reveal'; capturedPhotoUri: string }
   | { type: 'field_notes'; capturedPhotoUri?: string; spriteTemplateId?: string; extractedColors?: HexColor[] }
   | { type: 'friend_hood'; friendUid: string }
-  | { type: 'scrapbook'; cat: Cat };
+  | { type: 'scrapbook'; cat: Cat }
+  | { type: 'hood_scrapbook'; photoUri?: string };
 
 /** Swap for the authenticated UID once auth is wired up. */
 const CURRENT_UID = 'user_alice';
@@ -129,6 +139,9 @@ export default function App() {
         case 'scrapbook':
           setScreenState({ type: 'catalog' });
           return true;
+        case 'hood_scrapbook':
+          setScreenState({ type: 'hood' });
+          return true;
         default:
           setScreenState({ type: 'hood' });
           return true;
@@ -154,6 +167,9 @@ export default function App() {
       updated.placed_items,
       updated.item_placements ?? null,
     ).catch(console.error);
+    // Two writes rather than widening updateHoodLayout, which is about
+    // where things are placed and has no business carrying a diary.
+    updateHoodScrapbook(CURRENT_UID, hoodId, updated.scrapbook ?? []).catch(console.error);
   }, []);
 
   const goToScrapbook = useCallback(
@@ -241,17 +257,28 @@ export default function App() {
 
   // ── Full-screen sub-states ─────────────────────────────────────────────────
   if (screenState.type === 'camera') {
+    const { returnTo } = screenState;
     return (
       <SafeAreaProvider>
         <CameraScreen
-          onBack={goHome}
-          onProceedToFieldNotes={(capturedPhotoUri) =>
-            // If a photo was taken → go through sprite reveal; otherwise straight to field notes
-            capturedPhotoUri
-              ? setScreenState({ type: 'sprite_reveal', capturedPhotoUri })
-              : setScreenState({ type: 'field_notes' })
-          }
+          onBack={() => setScreenState(returnTo === 'hood_scrapbook' ? { type: 'hood_scrapbook' } : { type: 'hood' })}
+          onProceedToFieldNotes={(capturedPhotoUri) => {
+            // A photo taken for a scrapbook note goes back to the page it
+            // was being written on. Everything else is the sighting flow:
+            // a photo means sprite reveal, no photo means straight to the
+            // field notes.
+            if (returnTo === 'hood_scrapbook') {
+              setScreenState({ type: 'hood_scrapbook', photoUri: capturedPhotoUri });
+              return;
+            }
+            setScreenState(
+              capturedPhotoUri
+                ? { type: 'sprite_reveal', capturedPhotoUri }
+                : { type: 'field_notes' },
+            );
+          }}
           onOpenCatalog={() => setScreenState({ type: 'catalog' })}
+          requireCat={returnTo !== 'hood_scrapbook'}
         />
       </SafeAreaProvider>
     );
@@ -296,53 +323,6 @@ export default function App() {
     );
   }
 
-  if (screenState.type === 'catalog') {
-    return (
-      <SafeAreaProvider>
-        <CatalogScreen
-          userId={CURRENT_UID}
-          onLogSpotting={goToCamera}
-          onViewScrapbook={goToScrapbook}
-          onBack={goHome}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screenState.type === 'friends') {
-    return (
-      <SafeAreaProvider>
-        <FriendsScreen
-          currentUid={CURRENT_UID}
-          currentUser={user}
-          onBack={goHome}
-          onViewFriendHood={(friendUid) => setScreenState({ type: 'friend_hood', friendUid })}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screenState.type === 'scrapbook') {
-    return (
-      <SafeAreaProvider>
-        <ScrapbookScreen
-          cat={screenState.cat}
-          onBack={() => setScreenState({ type: 'catalog' })}
-        />
-      </SafeAreaProvider>
-    );
-  }
-
-  if (screenState.type === 'friend_hood') {
-    return (
-      <SafeAreaProvider>
-        <FriendHoodScreen
-          friendUid={screenState.friendUid}
-          onBack={() => setScreenState({ type: 'friends' })}
-        />
-      </SafeAreaProvider>
-    );
-  }
 
   // ── The Hood ───────────────────────────────────────────────────────────────
 
@@ -364,6 +344,58 @@ export default function App() {
     );
   }
 
+  /**
+   * The screens that sit ON TOP of the Hood rather than replacing it.
+   *
+   * Every screen used to be an early return, so opening the Cat-a-log
+   * unmounted the whole Hood — the scrolling world, the parallax layers,
+   * six cats with their schedulers and sprite sheets — and coming back
+   * built all of it again from nothing. That rebuild is the pause you feel
+   * on the way back to the scene, and it is real work, not an emulator
+   * artefact: it would cost the same on a device.
+   *
+   * So the Hood stays mounted underneath and these cover it. It holds
+   * still while covered (see `focused`), because the one thing worse than
+   * rebuilding a scene you cannot see is animating one.
+   *
+   * The camera flow above is deliberately NOT in here. It is a different
+   * place rather than a layer over this one, and holding a camera preview
+   * and a full scene in memory at once is a trade the other direction.
+   */
+  const overlay =
+    screenState.type === 'catalog' ? (
+      <CatalogScreen
+        userId={CURRENT_UID}
+        onLogSpotting={goToCamera}
+        onViewScrapbook={goToScrapbook}
+        onBack={goHome}
+      />
+    ) : screenState.type === 'friends' ? (
+      <FriendsScreen
+        currentUid={CURRENT_UID}
+        currentUser={user}
+        onBack={goHome}
+        onViewFriendHood={(friendUid) => setScreenState({ type: 'friend_hood', friendUid })}
+      />
+    ) : screenState.type === 'scrapbook' ? (
+      <ScrapbookScreen cat={screenState.cat} onBack={() => setScreenState({ type: 'catalog' })} />
+    ) : screenState.type === 'hood_scrapbook' ? (
+      <HoodScrapbookScreen
+        hood={activeHood}
+        hoodId={activeHoodId}
+        userId={CURRENT_UID}
+        pendingPhotoUri={screenState.photoUri}
+        onUpdateHood={handleUpdateHood}
+        onTakePhoto={() => setScreenState({ type: 'camera', returnTo: 'hood_scrapbook' })}
+        onBack={goHome}
+      />
+    ) : screenState.type === 'friend_hood' ? (
+      <FriendHoodScreen
+        friendUid={screenState.friendUid}
+        onBack={() => setScreenState({ type: 'friends' })}
+      />
+    ) : null;
+
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1 }}>
@@ -381,10 +413,18 @@ export default function App() {
           onOpenCamera={goToCamera}
           onOpenCatalog={() => setScreenState({ type: 'catalog' })}
           onOpenFriends={() => setScreenState({ type: 'friends' })}
+          onOpenScrapbook={() => setScreenState({ type: 'hood_scrapbook' })}
+          focused={overlay == null}
         />
 
         {streakToast != null && (
           <StreakToast count={streakToast} onDone={() => setStreakToast(null)} />
+        )}
+
+        {overlay != null && (
+          <View style={StyleSheet.absoluteFill} collapsable={false}>
+            {overlay}
+          </View>
         )}
       </View>
     </SafeAreaProvider>

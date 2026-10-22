@@ -545,6 +545,355 @@ const PROPS = {
       ellipse(c, x, GROUND_Y + y, 1.6, 2.4, neon);
     }
   },
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Scenery
+  //
+  // Everything above is something the PLAYER put down. These belong to the
+  // environment instead, and they exist because a Hood two and a half
+  // screens wide with nothing in it but your own six items reads as a
+  // backdrop rather than as a street.
+  //
+  // THE ONE RULE THAT MATTERS MOST HERE, learned the hard way:
+  //
+  //   DO NOT DRAW A 1-2px FEATURE THROUGH mat().
+  //
+  // `shade()` lights any pixel whose upper or left neighbour differs. On a
+  // feature one or two pixels wide EVERY pixel satisfies that, so the whole
+  // thing is repainted in its light tone and the base and dark tones render
+  // literally zero pixels. Measured on the previous pass: crate straw 0 base
+  // / 0 dark / 14 light; bush berries 0 dark; the vent grille base 0 of 91.
+  // Four of five "charm elements" were flat cream sticks for this reason.
+  //
+  // So: anything thin is painted with a RAW HEX that is never handed to
+  // mat(). shade() skips colours it has no tone entry for, which is exactly
+  // the behaviour thin detail wants. Anything that must keep an interior is
+  // drawn at 2x2 or larger.
+  //
+  // THE SECOND RULE: horizontal bands are not structure.
+  //
+  // Measured across all 35 props, the four most horizontally-banded are all
+  // scenery, and the worst was the bin at a horizontal colour-transition
+  // rate of 0.081/px — scanning any row of it, the colour changed less than
+  // twice. Stacked bands on a plain rectangle read as a cake or a stack of
+  // trays. Mid-frequency VERTICAL structure (ribs, staves, corner posts) is
+  // what the eye needs, and a band must never share a hex with the
+  // material's own dark tone or shade() silently widens it by a row.
+  //
+  // Same authoring rules as the goodies: 32px frame, bottom-anchored at
+  // GROUND_Y, true relative size against a cat.
+  // ─────────────────────────────────────────────────────────────────────
+
+  scenery_bin(c, t) {
+    // Warm galvanised, not blue. The previous pass moved the hue 63 degrees
+    // TOWARD blue while claiming to fix a cold palette, and this prop
+    // appears twice in the default alley.
+    const metal = mat(t, '#8A8178', '#B8AFA3', '#5C544B');
+    const lid = mat(t, '#968D83', '#C7BEB2', '#665E55');
+    const strap = '#8A7258';
+    const rib = '#6B635A';
+    // Tapered, because a straight cylinder with even fluting and a wide flat
+    // cap is a Doric column, which is what the first attempt at "vertical
+    // structure" produced.
+    vessel(c, 16, GROUND_Y - 15, GROUND_Y, 8, 6, metal);
+    // Two ribs, stopping at the strap rather than running the full height.
+    for (const x of [12, 20]) line(c, x, GROUND_Y - 13, x, GROUND_Y - 8, rib);
+    // The strap must be LIGHT enough to separate from the auto-shaded row
+    // above it, or the two merge into one 3px band whatever hex it is.
+    rect(c, 9, GROUND_Y - 7, 23, GROUND_Y - 6, strap);
+    // Side handles. These are the detail that says "bin" and they break the
+    // column silhouette at exactly the height a capital would sit.
+    rect(c, 5, GROUND_Y - 12, 7, GROUND_Y - 10, lid);
+    rect(c, 25, GROUND_Y - 12, 27, GROUND_Y - 10, lid);
+    // A shallower, narrower cap. At rx=8/ry=4 over a body tapering 17->13,
+    // the lid was eight of twenty-five rows and overhung the barrel on both
+    // sides — which is a MUSHROOM. The cap has to be subordinate to the
+    // body it sits on.
+    rect(c, 8, GROUND_Y - 17, 24, GROUND_Y - 16, lid);
+    dome(c, 16, GROUND_Y - 17, 6, 3, lid);
+  },
+
+  /**
+   * A stack of two crates.
+   *
+   * Three misreads before this one, all from being taller than wide: cake,
+   * fries, paper sack. Going wide and stacked fixed that and immediately
+   * produced a fourth — an ARMCHAIR — for two reasons worth writing down.
+   *
+   * One: `post` was set to the same hex as `wood`'s dark tone, so every
+   * auto-shaded row merged with both posts into an unbroken dark band and
+   * the posts never read as posts. That is the identical fault the bin had
+   * with its strap, reintroduced here one pass after it was fixed there.
+   * A band colour must never equal its material's own dark tone.
+   *
+   * Two: the stack stepped on the LEFT only, so the right edge ran as one
+   * continuous column top to bottom — and a mass that steps on one side is
+   * a chair profile. A crate stack reads from TWO shoulders.
+   */
+  scenery_crates(c, t) {
+    const wood = mat(t, '#C08A50', '#E8BA84', '#8A5D30');
+    const gap = '#6B4722';
+    const post = '#6E4A25';
+    const straw = '#E0C47E';
+    const strawDk = '#A8873F';
+
+    // Bottom crate — wide and low.
+    rect(c, 3, GROUND_Y - 12, 26, GROUND_Y, wood);
+    rect(c, 7, GROUND_Y - 8, 22, GROUND_Y - 7, gap);
+    rect(c, 7, GROUND_Y - 4, 22, GROUND_Y - 3, gap);
+    rect(c, 3, GROUND_Y - 12, 5, GROUND_Y, post);
+    rect(c, 24, GROUND_Y - 12, 26, GROUND_Y, post);
+
+    // Top crate, inset at BOTH ends, with y=GROUND_Y-13 left transparent so
+    // outline() draws the joint between them.
+    rect(c, 7, GROUND_Y - 23, 22, GROUND_Y - 14, wood);
+    rect(c, 11, GROUND_Y - 19, 18, GROUND_Y - 18, gap);
+    rect(c, 7, GROUND_Y - 23, 9, GROUND_Y - 14, post);
+    rect(c, 20, GROUND_Y - 23, 22, GROUND_Y - 14, post);
+
+    // Packing straw, back on the wide crate where it has room to be a tuft
+    // rather than a candle. Asymmetric and off to one side on purpose — the
+    // even four-across fan was half of why it read as a cake.
+    for (const [x, w, h] of [[11, 2, 3], [14, 3, 4], [18, 2, 2]]) {
+      rect(c, x, GROUND_Y - 23 - h, x + w, GROUND_Y - 23, straw);
+      rect(c, x, GROUND_Y - 23 - h, x, GROUND_Y - 23, strawDk);
+    }
+  },
+
+  scenery_vent(c, t) {
+    const shell = mat(t, '#BCB2A2', '#E4DCCB', '#847A6C');
+    const duct = mat(t, '#A89E8E', '#CFC6B6', '#746A5C');
+    const plate = '#9E9486';
+    const hole = '#3F3B35';
+    const lip = '#D8D0C2';
+    const bolt = '#C2704A';
+    rect(c, 5, GROUND_Y - 16, 27, GROUND_Y - 2, shell);
+    // A cowl that overhangs and a duct going somewhere. Without them this
+    // was a 0.92 box-fill rectangle with a dial on it — a combination safe.
+    rect(c, 3, GROUND_Y - 19, 29, GROUND_Y - 16, shell);
+    rect(c, 20, GROUND_Y - 25, 25, GROUND_Y - 19, duct);
+    rect(c, 19, GROUND_Y - 27, 27, GROUND_Y - 25, duct);
+    /**
+     * Louvre slats, dark holes in a light plate.
+     *
+     * The round grille read as a power symbol. The dot matrix that replaced
+     * it read as a TYPEWRITER, and the reason is value polarity: the dots
+     * were #AFAAA0 at 69% value sitting in a #4A463F well at 29%, so they
+     * were 40 points LIGHTER than the surface they were punched into. Light
+     * dots at a regular pitch in a dark rectangle are keys, or a speaker.
+     * A real vent is dark holes in a light plate, and horizontal louvres
+     * are the one shape that cannot be read as anything else.
+     *
+     * Slats on a 13-column PANEL do not band the 29-column PROP, so this
+     * does not undo the banding fix.
+     */
+    rect(c, 7, GROUND_Y - 15, 20, GROUND_Y - 5, plate);
+    for (let i = 0; i < 3; i++) {
+      const y = GROUND_Y - 14 + i * 3;
+      rect(c, 8, y, 19, y + 1, hole);
+      rect(c, 8, y + 2, 19, y + 2, lip);
+    }
+    rect(c, 7, GROUND_Y - 2, 11, GROUND_Y, shell);
+    rect(c, 21, GROUND_Y - 2, 25, GROUND_Y, shell);
+    rect(c, 6, GROUND_Y - 14, 7, GROUND_Y - 13, bolt);
+    rect(c, 25, GROUND_Y - 14, 26, GROUND_Y - 13, bolt);
+  },
+
+  /**
+   * A rooftop water tank, which replaced a TV aerial.
+   *
+   * The aerial could not be saved: its whole silhouette was 1px elements on
+   * a 1px mast, so at render size it was a grey scribble, and thickening it
+   * turned it into a fir tree. A staved timber tank is the other famous roof
+   * shape, it is warm, round, and reads at a glance.
+   */
+  scenery_water_tank(c, t) {
+    const stave = mat(t, '#B07C4C', '#DCA878', '#7B5227');
+    const hoop = '#8A5A2E';
+    const grain = '#A4753F';
+    const roof = mat(t, '#AE7F55', '#D4A277', '#7A5633');
+    const bird = mat(t, '#5A5560', '#857F8D', '#38343F');
+    for (const x of [8, 13, 19, 24]) rect(c, x, GROUND_Y - 7, x + 1, GROUND_Y, stave);
+    rect(c, 8, GROUND_Y - 4, 25, GROUND_Y - 3, hoop);
+    vessel(c, 16, GROUND_Y - 20, GROUND_Y - 6, 9, 8, stave);
+    // Two grain lines, stopping short of the hoops. Five columns at a 3px
+    // pitch crossing two hoops made a 9x5 lattice and the barrel turned
+    // into a RABBIT HUTCH — the same single-frequency texture fault the
+    // eight-ribbed bin was deleted for, on the prop that read best.
+    line(c, 12, GROUND_Y - 14, 12, GROUND_Y - 11, grain);
+    line(c, 20, GROUND_Y - 14, 20, GROUND_Y - 11, grain);
+    // Hoops two steps lighter than stave.dark, or shade() merges them into a
+    // 3px bar and eight of the rows go dark.
+    rect(c, 8, GROUND_Y - 16, 24, GROUND_Y - 15, hoop);
+    rect(c, 8, GROUND_Y - 10, 24, GROUND_Y - 9, hoop);
+    dome(c, 16, GROUND_Y - 20, 10, 4, roof);
+    rect(c, 15, GROUND_Y - 27, 17, GROUND_Y - 26, roof);
+    // The neck notch between head and body is what makes this a bird rather
+    // than a 14px grey lump with its beak buried inside it.
+    ellipse(c, 24, GROUND_Y - 22, 2, 2, bird);
+    ellipse(c, 22, GROUND_Y - 24, 1, 1, bird);
+    px(c, 20, GROUND_Y - 24, '#E8A33C');
+    px(c, 27, GROUND_Y - 21, bird);
+  },
+
+  scenery_birdbath(c, t) {
+    const stone = mat(t, '#C9BCA6', '#EFE5D2', '#95896F');
+    const water = mat(t, '#7FB4D4', '#B8E0F2', '#56829F');
+    const ripple = '#4E7794';
+    // A two-stage dish, so the silhouette gets a shoulder instead of one
+    // straight 11->3 cone, and a collar and a flare to break eleven
+    // identical stem rows. Without them this is an anvil.
+    dome(c, 16, GROUND_Y, 10, 4, stone);
+    rect(c, 14, GROUND_Y - 16, 18, GROUND_Y - 4, stone);
+    rect(c, 12, GROUND_Y - 7, 20, GROUND_Y - 6, stone);
+    vessel(c, 16, GROUND_Y - 18, GROUND_Y - 16, 8, 3, stone);
+    vessel(c, 16, GROUND_Y - 21, GROUND_Y - 19, 11, 8, stone);
+    // An inner wall under the water, so this is a bowl and not a puddle
+    // balanced on a plate.
+    ellipse(c, 16, GROUND_Y - 19, 9, 1, '#95896F');
+    ellipse(c, 16, GROUND_Y - 19, 7, 1, water);
+    // Ripples must be DARKER than a lit water surface. The previous pair used
+    // the exact hex shade() had already painted on 23 other pixels.
+    rect(c, 11, GROUND_Y - 19, 13, GROUND_Y - 19, ripple);
+    rect(c, 19, GROUND_Y - 19, 21, GROUND_Y - 19, ripple);
+  },
+
+  scenery_bush(c, t) {
+    // The same leaf family as the flower pot and the catnip, so the garden
+    // reads as one planting rather than three greens.
+    const leaf = mat(t, '#5C9B4A', '#8CC776', '#3C6C2F');
+    const berry = '#D4607A';
+    const berryLt = '#F094A8';
+    const notch = '#3A6A2D';
+    // Three lobes of nearly equal height. The centre was ry=12 against
+    // sides of 6 and 5 — a ten-row rise over seven columns, which is a 55
+    // degree slope, which is a CONIFER with a berry on top for a star. It
+    // also left a single uninterrupted 124px interior, 57% of the prop and
+    // a new record for the project.
+    dome(c, 9, GROUND_Y, 7, 7, leaf);
+    dome(c, 23, GROUND_Y, 7, 6, leaf);
+    dome(c, 16, GROUND_Y, 8, 8, leaf);
+    // Cut at the junction rows, where the lobes actually meet. The previous
+    // notches ran y=24-28, entirely inside the mass, so the skyline at the
+    // notch columns was identical to its neighbours and it silhouetted as
+    // one dome — the exact fault the pass claimed to have fixed.
+    // Notches must start ABOVE the local lobe top to cut the skyline. Twice
+    // now they were drawn inside the mass and read as seams on a beach ball.
+    line(c, 12, GROUND_Y - 13, 12, GROUND_Y - 7, notch);
+    line(c, 20, GROUND_Y - 12, 20, GROUND_Y - 6, notch);
+    // Leaf clumps, so the interior is foliage rather than a field of one
+    // green.
+    for (const [x, y, col] of [
+      [11, -4, '#4F8A3E'], [17, -6, '#7FB868'], [21, -3, '#4F8A3E'],
+      [14, -10, '#7FB868'], [19, -9, '#4F8A3E'], [8, -8, '#7FB868'],
+    ]) ellipse(c, x, GROUND_Y + y, 2, 2, col);
+    // 2x2 so a berry keeps an interior, and far enough inside the edge that
+    // the keyline does not bite an arm off.
+    for (const [x, y] of [[10, -9], [21, -7], [15, -11]]) {
+      rect(c, x, GROUND_Y + y, x + 1, GROUND_Y + y + 1, berry);
+      px(c, x, GROUND_Y + y, berryLt);
+    }
+  },
+
+  scenery_laundry_pile(c, t) {
+    const basket = mat(t, '#C2985C', '#E8C089', '#8A6837');
+    const weave = '#8A6837';
+    const linen = mat(t, '#E6DCCB', '#FDF6E9', '#B5AA95');
+    const pink = mat(t, '#D8A8B4', '#F4D0D9', '#A47884');
+    const blue = mat(t, '#9FB4C4', '#CBDAE6', '#718595');
+    vessel(c, 16, GROUND_Y - 11, GROUND_Y, 10, 8, basket);
+    /**
+     * The offset must be an INTEGER.
+     *
+     * This loop was copied from item_cozy_basket with the start row changed
+     * by one, which made `(y / 3) % 2` fractional on every row — so every
+     * px() wrote to a float-keyed array slot that is never read back and the
+     * weave rendered ZERO pixels. The house original lays down 67. The
+     * result was the largest flat colour blob in the project.
+     */
+    // Weave on the lower half only. Cross-hatching the full basket under
+    // three stacked cloth domes read as a CUPCAKE — wrapper and frosting.
+    for (let y = GROUND_Y - 6; y < GROUND_Y; y += 3) {
+      for (let x = 7; x <= 25; x += 3) px(c, x + ((((y / 3) | 0) % 2)), y, weave);
+    }
+    // One asymmetric heap, not three stacked rounds.
+    dome(c, 14, GROUND_Y - 11, 8, 6, linen);
+    dome(c, 19, GROUND_Y - 14, 4, 3, pink);
+    rect(c, 9, GROUND_Y - 13, 13, GROUND_Y - 11, blue);
+    // One sleeve over the rim. Nothing overhanging is what made this a cake
+    // in a box rather than laundry.
+    rect(c, 24, GROUND_Y - 10, 27, GROUND_Y - 4, pink);
+  },
+
+  scenery_soap_bottle(c, t) {
+    const body = mat(t, '#6FA6D4', '#A8D2F0', '#4A7399');
+    const cap = mat(t, '#E8A33C', '#FFCA7E', '#B0721B');
+    const label = mat(t, '#F2EADA', '#FFFFFF', '#C4BBAA');
+    const text = '#527CA2';
+    vessel(c, 16, GROUND_Y - 15, GROUND_Y, 6, 7, body);
+    // Cap wider than the neck, which is what a cap does. They were the other
+    // way round, which gave it tombstone shoulders.
+    rect(c, 14, GROUND_Y - 19, 18, GROUND_Y - 15, body);
+    rect(c, 13, GROUND_Y - 21, 19, GROUND_Y - 19, cap);
+    // Right edge inset so a column of body survives for the shadow side.
+    // Full width, the bottle was lit down BOTH edges and had no roundness.
+    rect(c, 11, GROUND_Y - 11, 20, GROUND_Y - 6, label);
+    rect(c, 12, GROUND_Y - 10, 15, GROUND_Y - 10, text);
+    rect(c, 12, GROUND_Y - 7, 14, GROUND_Y - 7, text);
+    // Two rules and nothing else. This label has now carried a single dead
+    // pixel, then floating bubbles that read as a radio aerial, then a paw
+    // whose toes fused into its pad and read as a logo. At ten pixels across
+    // there is room for text or for a mark, not for a mark that works.
+    rect(c, 12, GROUND_Y - 9, 18, GROUND_Y - 9, text);
+  },
+
+  scenery_lantern_pole(c, t) {
+    const pole = mat(t, '#8A6342', '#B88B66', '#593C26');
+    const paper = mat(t, '#F0924A', '#FFC184', '#AE5A20');
+    const glow = '#FFE6B8';
+    const cord = '#4E331F';
+    // A 3px mast and a 2px arm. The previous one was 21 isolated single
+    // pixels all in the light tone, carrying a 1px Bresenham staircase —
+    // which is the exact fault the TV aerial was deleted for, reproduced in
+    // the same sitting, on the one prop that sways.
+    rect(c, 5, GROUND_Y - 26, 7, GROUND_Y, pole);
+    rect(c, 3, GROUND_Y - 1, 9, GROUND_Y, pole);
+    rect(c, 7, GROUND_Y - 26, 22, GROUND_Y - 25, pole);
+    rect(c, 22, GROUND_Y - 27, 23, GROUND_Y - 25, pole);
+    for (const [x, cy] of [[13, GROUND_Y - 18], [20, GROUND_Y - 15]]) {
+      line(c, x, GROUND_Y - 25, x, cy - 5, cord);
+      ellipse(c, x, cy, 4, 5, paper);
+      // A solid core. A 2px glow left the paper satisfying both litEdge and
+      // darkEdge, which sprayed tones in a cross — visible dither at 6x.
+      rect(c, x - 1, cy - 1, x + 1, cy + 1, glow);
+      rect(c, x - 1, cy + 6, x + 1, cy + 6, '#AE5A20');
+    }
+  },
+
+  scenery_fruit_crate(c, t) {
+    const wood = mat(t, '#C08A50', '#E8BA84', '#8A5D30');
+    const gap = '#6B4722';
+    const post = '#8A5D30';
+    const apple = mat(t, '#D4523E', '#F2886F', '#9A3122');
+    const pear = mat(t, '#C9B24A', '#EBD782', '#937F2B');
+    const leaf = '#5C9B4A';
+    rect(c, 5, GROUND_Y - 11, 27, GROUND_Y, wood);
+    // The gap stops at the posts. Running it full width put one unbroken
+    // dark band across the whole prop, which is a gateau.
+    rect(c, 8, GROUND_Y - 6, 24, GROUND_Y - 5, gap);
+    rect(c, 5, GROUND_Y - 11, 7, GROUND_Y, post);
+    rect(c, 25, GROUND_Y - 11, 27, GROUND_Y, post);
+    // 3x3 blocks deliberately overlapping, so the keyline runs round the
+    // outside of the heap instead of round every individual fruit — five
+    // separately-outlined discs read as red and yellow stars.
+    for (const [x, y, col] of [
+      [9, -14, apple], [13, -15, pear], [17, -14, apple], [20, -15, pear],
+      [11, -17, apple], [15, -18, pear], [18, -17, apple],
+    ]) {
+      rect(c, x, GROUND_Y + y, x + 2, GROUND_Y + y + 2, col);
+    }
+    diagEllipse(c, 16, GROUND_Y - 21, 3, 1, leaf);
+  },
 };
 
 /** A four-pixel twinkle. Used for the legendary items. */

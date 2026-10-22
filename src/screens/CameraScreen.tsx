@@ -28,6 +28,16 @@ export interface CameraScreenProps {
   onBack: () => void;
   /** Called with the captured photo URI, or undefined when user skips the photo. */
   onProceedToFieldNotes: (capturedPhotoUri?: string) => void;
+  /**
+   * Whether the shot has to contain a cat.
+   *
+   * True for the sighting flow, where a photo without a cat cannot become
+   * a Field Note and saying so early is a kindness. False when the photo is
+   * for a scrapbook page: that is a picture of the PLACE, and refusing it
+   * for having no cat in it — which is what this screen did the first time
+   * it was wired up — is the camera enforcing a rule from somewhere else.
+   */
+  requireCat?: boolean;
   onOpenCatalog: () => void;
 }
 
@@ -270,6 +280,7 @@ function NoCatSheet({
 export function CameraScreen({
   onBack,
   onProceedToFieldNotes,
+  requireCat = true,
   onOpenCatalog,
 }: CameraScreenProps) {
   const [phase, setPhase]       = useState<CameraPhase>('viewfinder');
@@ -355,8 +366,15 @@ export function CameraScreen({
       Animated.timing(shutterFlash, { toValue: 0.92, duration: 60,  useNativeDriver: true }),
       Animated.timing(shutterFlash, { toValue: 0,    duration: 380, useNativeDriver: true }),
     ]).start(async () => {
-      setPhase('detecting');
       const photoUri = await photoCapturePromise;
+
+      // Nothing to detect when the shot does not need a cat in it.
+      if (!requireCat) {
+        onProceedToFieldNotes(photoUri);
+        return;
+      }
+
+      setPhase('detecting');
       // 10-second failsafe so ML Kit can never leave the user stuck
       const timeout = new Promise<{ detected: boolean; confidence: number }>(
         (resolve) => setTimeout(() => resolve({ detected: false, confidence: 0 }), 10_000),
@@ -364,7 +382,7 @@ export function CameraScreen({
       const result = await Promise.race([detectCatInPhoto(photoUri), timeout]);
       setPhase(result.detected ? 'cat_found' : 'no_cat');
     });
-  }, [phase, shutterFlash, shutterScale, hasCam, flashOn, photoOutput]);
+  }, [phase, shutterFlash, shutterScale, hasCam, flashOn, photoOutput, requireCat, onProceedToFieldNotes]);
 
   const handleRetake = useCallback(() => {
     setCapturedPhotoPath(undefined);

@@ -103,47 +103,87 @@ export function HoodSheet({
   ).current;
 
   return (
-    <Animated.View
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height,
-        transform: [{ translateY: offset }],
-        backgroundColor: background,
-        borderTopLeftRadius: 26,
-        borderTopRightRadius: 26,
-        shadowColor: '#2C2A29',
-        shadowOffset: { width: 0, height: -6 },
-        shadowOpacity: 0.16,
-        shadowRadius: 18,
-        elevation: 16,
-      }}
-    >
-      {/* Grab area — drag anywhere on the peek, or tap it to toggle */}
-      <View {...pan.panHandlers}>
-        <Touchable
-          onPress={() => onChange(!expanded)}
-          scaleTo={0.97}
+    <>
+      {/*
+       * Tap anywhere off the drawer to close it.
+       *
+       * Without this the only ways out were dragging it back down or finding
+       * the peek strip — which is the one part of the drawer the open drawer
+       * is sitting on top of. Every other sheet in the app dismisses on a tap
+       * outside; this was the exception, and it is the one you open most.
+       *
+       * The dim rides the same offset the sheet does, so it tracks a drag
+       * rather than snapping when the gesture ends. pointerEvents cannot be
+       * animated, so it follows the controlled prop instead, which is right in
+       * the only case that matters: mid-drag the finger is already on the
+       * sheet.
+       */}
+      <Animated.View
+        pointerEvents={expanded ? 'auto' : 'none'}
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: 0,
+          backgroundColor: '#2C2A29',
+          opacity: offset.interpolate({
+            inputRange: [0, Math.max(1, closedOffset)],
+            outputRange: [0.38, 0],
+            extrapolate: 'clamp',
+          }),
+        }}
+      >
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => onChange(false)}
           accessibilityRole="button"
-          accessibilityLabel={expanded ? 'Close the decorating drawer' : 'Open the decorating drawer'}
-          style={{ paddingTop: 10 }}
-        >
-          <View
-            style={{
-              width: 40,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: '#DED6CB',
-              alignSelf: 'center',
-            }}
-          />
-          <View style={{ minHeight: peekHeight - 14, justifyContent: 'center' }}>{peek}</View>
-        </Touchable>
-      </View>
+          accessibilityLabel="Close the decorating drawer"
+        />
+      </Animated.View>
 
-      {children}
-    </Animated.View>
+      <Animated.View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height,
+          transform: [{ translateY: offset }],
+          backgroundColor: background,
+          borderTopLeftRadius: 26,
+          borderTopRightRadius: 26,
+          shadowColor: '#2C2A29',
+          shadowOffset: { width: 0, height: -6 },
+          shadowOpacity: 0.16,
+          shadowRadius: 18,
+          elevation: 16,
+        }}
+      >
+        {/* Grab area — drag anywhere on the peek, or tap it to toggle */}
+        <View {...pan.panHandlers}>
+          <Touchable
+            onPress={() => onChange(!expanded)}
+            scaleTo={0.97}
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? 'Close the decorating drawer' : 'Open the decorating drawer'}
+            style={{ paddingTop: 10 }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: '#DED6CB',
+                alignSelf: 'center',
+              }}
+            />
+            <View style={{ minHeight: peekHeight - 14, justifyContent: 'center' }}>{peek}</View>
+          </Touchable>
+        </View>
+
+        {children}
+      </Animated.View>
+    </>
   );
 }

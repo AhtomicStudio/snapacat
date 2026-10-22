@@ -110,11 +110,14 @@ export function Clouds({
   horizonY,
   seed,
   dark,
+  animate = true,
 }: {
   width: number;
   horizonY: number;
   seed: number;
   dark: boolean;
+  /** False while the scene is covered by another screen — stop the loop. */
+  animate?: boolean;
 }) {
   const specs = useMemo(
     () =>
@@ -132,7 +135,7 @@ export function Clouds({
   return (
     <>
       {specs.map((spec, i) => (
-        <DriftingCloud key={i} spec={spec} width={width} dark={dark} />
+        <DriftingCloud key={i} spec={spec} width={width} dark={dark} animate={animate} />
       ))}
     </>
   );
@@ -142,12 +145,14 @@ function DriftingCloud({
   spec,
   width,
   dark,
+  animate,
 }: {
   spec: { block: number; top: number; periodMs: number; opacity: number };
   width: number;
   dark: boolean;
+  animate: boolean;
 }) {
-  const cycle = useCycle(spec.periodMs);
+  const cycle = useCycle(spec.periodMs, animate);
   const span = spec.block * 11;
 
   const translateX = cycle.interpolate({
@@ -184,10 +189,13 @@ export function StarField({
   width,
   horizonY,
   seed,
+  animate = true,
 }: {
   width: number;
   horizonY: number;
   seed: number;
+  /** False while the scene is covered by another screen — stop the loop. */
+  animate?: boolean;
 }) {
   const stars = useMemo(() => {
     const out: { x: number; y: number; size: number; opacity: number; twinkles: boolean }[] = [];
@@ -205,7 +213,7 @@ export function StarField({
     return out;
   }, [seed, width, horizonY]);
 
-  const cycle = useCycle(4200);
+  const cycle = useCycle(4200, animate);
 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height: horizonY }}>
@@ -299,14 +307,17 @@ export function Motes({
   height,
   seed,
   count = 14,
+  animate = true,
 }: {
   style: MoteStyle;
   width: number;
   height: number;
   seed: number;
   count?: number;
+  /** False while the scene is covered by another screen — stop the loop. */
+  animate?: boolean;
 }) {
-  const cycle = useCycle(24000, style !== 'none');
+  const cycle = useCycle(24000, animate && style !== 'none');
 
   const motes = useMemo(() => {
     if (style === 'none') return [];
@@ -390,13 +401,16 @@ export function Fireflies({
   height,
   seed,
   count = 7,
+  animate = true,
 }: {
   width: number;
   height: number;
   seed: number;
   count?: number;
+  /** False while the scene is covered by another screen — stop the loop. */
+  animate?: boolean;
 }) {
-  const cycle = useCycle(16000);
+  const cycle = useCycle(16000, animate);
 
   const flies = useMemo(
     () =>
@@ -472,15 +486,18 @@ export function LightPool({
   spread,
   flicker,
   phase,
+  animate = true,
 }: {
   size: number;
   colour: string;
   spread: number;
   flicker: number;
   phase: number;
+  /** False while the scene is covered by another screen — stop the loop. */
+  animate?: boolean;
 }) {
   // Coprime-ish per prop so two lanterns never pulse together.
-  const cycle = useCycle(2600 + (phase % 5) * 370, flicker > 0);
+  const cycle = useCycle(2600 + (phase % 5) * 370, animate && flicker > 0);
   const diameter = size * spread;
 
   const opacity = flicker

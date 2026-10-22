@@ -294,6 +294,10 @@ export interface HoodHomeScreenProps {
   onOpenCamera: () => void;
   onOpenCatalog: () => void;
   onOpenFriends: () => void;
+  /** Opens this Hood's scrapbook. */
+  onOpenScrapbook: () => void;
+  /** False while another screen is covering the Hood. */
+  focused?: boolean;
   /** Injectable for tests — production reads the device clock. */
   now?: Date;
 }
@@ -322,6 +326,8 @@ export function HoodHomeScreen({
   onOpenCamera,
   onOpenCatalog,
   onOpenFriends,
+  onOpenScrapbook,
+  focused = true,
   now,
 }: HoodHomeScreenProps) {
   const insets = useSafeAreaInsets();
@@ -562,6 +568,7 @@ export function HoodHomeScreen({
           envId={activeEnv.env_id}
           onPressCat={(_slot, spriteId, atItemId) => setTappedCat({ spriteId, atItemId })}
           onPressItem={handleRemove}
+          paused={!focused}
           onPressSpot={(anchorId) => setPickerSlotId(`${HOOD_SPOT_PREFIX}${anchorId}`)}
           itemAnchors={hood.item_placements ?? undefined}
         />
@@ -656,7 +663,7 @@ export function HoodHomeScreen({
 
         <View style={{ gap: 12, alignItems: 'flex-end' }}>
           <GlassButton icon="🐱" label="Cat-a-log" onPress={onOpenCatalog} dark={dark} />
-          <View style={{ width: 46, height: 46 }} />
+          <GlassButton icon="📖" label="Scrapbook" onPress={onOpenScrapbook} dark={dark} size={46} />
         </View>
       </View>
 

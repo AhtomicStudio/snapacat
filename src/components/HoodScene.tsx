@@ -42,12 +42,16 @@ import {
   hashSeed,
   layoutScene,
   paintOrder,
+  planeScale,
+  planeX,
+  planeY,
   type CatPlacement,
   type ItemPlacement,
 } from '../config/scene';
 import { skyPalette, isDark, type TimeOfDay } from '../utils/timeOfDay';
 import { getDressing, type SceneDressing, type GroundStyle } from '../config/sceneDressing';
-import { propLight, propMotion } from '../config/propMotion';
+import { propLight, propMotion, type PropMotion } from '../config/propMotion';
+import { sceneryFor, type SceneryProp } from '../config/scenery';
 import { Clouds, Fireflies, LightPool, Motes, StarField, moteStyleFor } from './SceneAmbience';
 import { font } from '../theme';
 import { mixHex, shade, tint, hashIndex } from '../utils/colour';
@@ -1074,10 +1078,10 @@ function SceneCat({
  * `still` props get an empty array and no animation is started at all, which
  * matters because most of the twenty-five are still.
  */
-function usePropDrift(itemId: string, phase: number) {
-  const motion = useMemo(() => propMotion(itemId), [itemId]);
+/** The motion half, taking a PropMotion directly so scenery can use it too. */
+function useDrift(motion: PropMotion, phase: number, animate = true) {
   const t = useRef(new Animated.Value(0)).current;
-  const animated = motion.kind !== 'still';
+  const animated = animate && motion.kind !== 'still';
 
   useEffect(() => {
     if (!animated) return undefined;
@@ -1110,12 +1114,110 @@ function usePropDrift(itemId: string, phase: number) {
   }, [motion, t]);
 }
 
+function usePropDrift(itemId: string, phase: number) {
+  const motion = useMemo(() => propMotion(itemId), [itemId]);
+  return useDrift(motion, phase);
+}
+
+const STILL_MOTION: PropMotion = { kind: 'still' };
+
+/**
+ * A piece of the environment, and the one thing in the Hood that answers
+ * back without changing anything.
+ *
+ * Tapping scenery does not place, remove, buy or score — it wobbles and
+ * tells you something about the neighbourhood. That is the whole point:
+ * a world where the only touchable things are the ones with a number
+ * attached is a menu with a picture behind it. The reward for poking the
+ * bin is finding out somebody keeps knocking the lid off.
+ */
+function SceneryItem({
+  prop, size, left, top, dark, paused, onPoke,
+}: {
+  prop: SceneryProp;
+  size: number;
+  left: number;
+  top: number;
+  dark: boolean;
+  paused: boolean;
+  onPoke: (line: string) => void;
+}) {
+  const art = getPropSheet(prop.id);
+  const drift = useDrift(prop.motion ?? STILL_MOTION, Math.round(prop.u * 100), !paused);
+
+  /**
+   * Atmospheric recession.
+   *
+   * Scenery sits between depth 0.10 and 0.26 and was being drawn at full
+   * contrast with the same hard keyline as a cat standing at the front of
+   * the plane — which is most of why it read as stickers laid on the
+   * ground rather than as part of the place. Letting a little of the
+   * ground through softens the keyline and pushes it back, for the price
+   * of one number. Same principle as the hazed skyline rows.
+   */
+  // Measured, 0.84 + depth*0.5 gave 0.89 at the far end and 0.97 at the near
+  // one — an eight-point spread that moved the keyline by one to three points
+  // of value. Invisible. The range has to be wide enough to see.
+  const recede = 0.72 + Math.min(prop.depth, 0.3) * 0.67;
+
+  const nudge = useRef(new Animated.Value(0)).current;
+
+
+  const poke = useCallback(() => {
+    // A knock, not a bounce. Scenery is heavy and bolted down.
+    nudge.setValue(0);
+    Animated.sequence([
+      Animated.timing(nudge, { toValue: -3, duration: 90, useNativeDriver: true }),
+      Animated.spring(nudge, { toValue: 0, tension: 180, friction: 5, useNativeDriver: true }),
+    ]).start();
+
+    onPoke(prop.line);
+  }, [nudge, onPoke, prop.line]);
+
+  if (!art) return null;
+
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: size,
+        height: size,
+        zIndex: Math.round(prop.depth * 1000),
+      }}
+    >
+      <Touchable
+        onPress={poke}
+        accessibilityRole="button"
+        accessibilityLabel={prop.line}
+        scaleTo={0.94}
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}
+      >
+        <ContactShadow size={size} dark={dark} />
+        <Animated.Image
+          source={art}
+          resizeMode="contain"
+          fadeDuration={0}
+          style={{
+            width: size,
+            height: size,
+            opacity: recede,
+            transform: [...drift, { translateY: nudge }],
+          }}
+        />
+      </Touchable>
+    </View>
+  );
+}
+
 function SceneItem({
   placement,
   size,
   left,
   top,
   dark,
+  animate,
   onPress,
 }: {
   placement: ItemPlacement;
@@ -1123,6 +1225,8 @@ function SceneItem({
   left: number;
   top: number;
   dark: boolean;
+  /** False while the scene is covered — stops lantern flicker. */
+  animate: boolean;
   /** Absent on read-only Hoods. */
   onPress?: () => void;
 }) {
@@ -1144,6 +1248,7 @@ function SceneItem({
           spread={light.spread}
           flicker={light.flicker}
           phase={Math.round(placement.x * 100)}
+          animate={animate}
         />
       )}
       <ContactShadow size={size} dark={dark} />
@@ -1348,6 +1453,13 @@ export interface HoodSceneProps {
   itemAnchors?: Record<string, string>;
   /** Read-only friend Hoods suppress interaction. */
   readOnly?: boolean;
+  /**
+   * Covered by another screen. The scene stays mounted — rebuilding it
+   * is what made coming back slow — but it stops animating, because six
+   * schedulers and a parallax layer running behind an opaque catalog is
+   * work nobody can see.
+   */
+  paused?: boolean;
 }
 
 export function HoodScene({
@@ -1364,6 +1476,7 @@ export function HoodScene({
   onPressSpot,
   itemAnchors,
   readOnly = false,
+  paused = false,
 }: HoodSceneProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const dark = isDark(time);
@@ -1385,6 +1498,26 @@ export function HoodScene({
   );
 
   const actors = useMemo(() => paintOrder(layout), [layout]);
+
+  const scenery = useMemo(() => sceneryFor(envId), [envId]);
+
+  /**
+   * The line the last-tapped piece of scenery is saying.
+   *
+   * Held here rather than inside the prop, and drawn OUTSIDE the scrolling
+   * world, because a caption parented to its prop pans with it: the first
+   * attempt clipped off the side of the screen, and clamping it into the
+   * world did not help — the prop was near the edge of the VIEW, not of
+   * the world, and the two move independently. A caption that slides away
+   * while you read it is worse than one that cannot fit.
+   */
+  const [sceneryLine, setSceneryLine] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (sceneryLine == null) return undefined;
+    const t = setTimeout(() => setSceneryLine(null), 2600);
+    return () => clearTimeout(t);
+  }, [sceneryLine]);
 
   // Theme wins on the two colours it defines; the rest of the palette still
   // comes from the clock, so a themed Hood reads differently at night.
@@ -1463,11 +1596,11 @@ export function HoodScene({
               transform: [{ translateX: parallax(PARALLAX_SKY) }],
             }}
           >
-            {dark && <StarField width={worldW} horizonY={horizonY} seed={seed} />}
+            {dark && <StarField width={worldW} horizonY={horizonY} seed={seed} animate={!paused} />}
             {/* Parked below the top chrome, not behind it — at 0.16 of the
                 horizon the moon sat under the Hood-name pill. */}
             <Luminary dark={dark} left={viewW * 0.66} top={horizonY * 0.4} />
-            <Clouds width={worldW} horizonY={horizonY} seed={seed} dark={dark} />
+            <Clouds width={worldW} horizonY={horizonY} seed={seed} dark={dark} animate={!paused} />
           </Animated.View>
 
           {/* ── Far layer: the distant skyline, washed toward the sky.     */}
@@ -1606,10 +1739,31 @@ export function HoodScene({
                 width={worldW}
                 height={height}
                 seed={seed}
+                animate={!paused}
               />
               {dark && dressing.wallStyle !== 'none' && (
-                <Fireflies width={worldW} height={height * 0.72} seed={seed} />
+                <Fireflies width={worldW} height={height * 0.72} seed={seed} animate={!paused} />
               )}
+
+              {/* Scenery. Fixed to the environment, painted before the
+                  actors and at its own depth, so a cat wandering to the
+                  back still passes in front of the bin rather than
+                  through it. */}
+              {scenery.map((prop, i) => {
+                const size = ACTOR_BASE_SIZE * planeScale(prop.depth) * (prop.scale ?? 1);
+                return (
+                  <SceneryItem
+                    key={`scenery${i}`}
+                    prop={prop}
+                    size={size}
+                    left={planeX(prop.u, prop.depth) * worldW - size / 2}
+                    top={planeY(prop.depth) * height - size}
+                    dark={dark}
+                    paused={paused}
+                    onPoke={setSceneryLine}
+                  />
+                );
+              })}
 
               {/* Vacant spots, under the actors so a cat or an item
                   always paints over the invitation rather than behind
@@ -1648,6 +1802,7 @@ export function HoodScene({
                       left={left}
                       top={top}
                       dark={dark}
+                      animate={!paused}
                       onPress={
                         readOnly || !onPressItem ? undefined : () => onPressItem(item.itemId)
                       }
@@ -1675,13 +1830,54 @@ export function HoodScene({
                     // Someone else's Hood is a photograph, not a place you are
                     // in: its cats breathe but do not wander off where the
                     // viewer has no say in it.
-                    alive={!readOnly}
+                    alive={!readOnly && !paused}
                     onPress={() => handlePressCat(cat)}
                   />
                 );
               })}
             </View>
           </Animated.ScrollView>
+
+          {/* What a tapped piece of scenery had to say. Above the wash so
+              it stays legible after dark, and anchored to the view so it
+              holds still while the world behind it pans. */}
+          {sceneryLine != null && (
+            <View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                left: 16,
+                right: 16,
+                // Clear of the control row, which sits between 14% and 24%.
+                bottom: '28%',
+                alignItems: 'center',
+              }}
+            >
+              <View
+                style={{
+                  maxWidth: '86%',
+                  backgroundColor: dark ? 'rgba(22,20,30,0.92)' : 'rgba(250,246,240,0.96)',
+                  borderRadius: 14,
+                  paddingHorizontal: 14,
+                  paddingVertical: 9,
+                  borderWidth: 1,
+                  borderColor: dark ? 'rgba(255,255,255,0.14)' : 'rgba(44,42,41,0.10)',
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    lineHeight: 17,
+                    fontFamily: font.medium,
+                    color: dark ? 'rgba(255,255,255,0.9)' : '#4A443F',
+                    textAlign: 'center',
+                  }}
+                >
+                  {sceneryLine}
+                </Text>
+              </View>
+            </View>
+          )}
 
           {/* ── Wash ────────────────────────────────────────────────────── */}
           <View

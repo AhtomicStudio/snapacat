@@ -33,6 +33,16 @@ export const PROP_SHEETS: Record<string, ImageSourcePropType> = {
   item_lantern: require('./item_lantern.png'),
   item_fish_mobile: require('./item_fish_mobile.png'),
   item_neon_paw_sign: require('./item_neon_paw_sign.png'),
+  scenery_bin: require('./scenery_bin.png'),
+  scenery_crates: require('./scenery_crates.png'),
+  scenery_vent: require('./scenery_vent.png'),
+  scenery_water_tank: require('./scenery_water_tank.png'),
+  scenery_birdbath: require('./scenery_birdbath.png'),
+  scenery_bush: require('./scenery_bush.png'),
+  scenery_laundry_pile: require('./scenery_laundry_pile.png'),
+  scenery_soap_bottle: require('./scenery_soap_bottle.png'),
+  scenery_lantern_pole: require('./scenery_lantern_pole.png'),
+  scenery_fruit_crate: require('./scenery_fruit_crate.png'),
 };
 
 /** Every item id that has authored art. */
