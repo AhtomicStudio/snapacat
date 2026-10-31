@@ -70,6 +70,28 @@ const FACING_VECTOR: Record<SpriteDirection, readonly [number, number]> = {
  * directional sheet; a turn is just those facings played in order. That is the
  * whole transition — three frames of existing art and a timer.
  */
+/**
+ * Which way round a cat pivots when it is turning all the way about.
+ *
+ * Through the FRONT. Either route is four steps, so the cost is the same and
+ * the only difference is what the player watches: a cat turning through S
+ * sweeps its face across the camera, and a cat turning through N shows its
+ * back for three frames and reads as sulking. The back facings are also the
+ * weakest art on the sheet — no tail in the silhouette, and a walk cycle that
+ * can only sway — so the less time spent in them the better.
+ *
+ * S to N is the one pair with no front to prefer: both midpoints are a
+ * profile. That is where the tie-break still earns its keep, and it has to,
+ * or six cats about-facing at once all pivot the same way.
+ */
+function aboutFaceClockwise(start: number, tieBreak: number): boolean {
+  const northness = (index: number) => -FACING_VECTOR[DIRECTIONS[index % 8]!][1];
+  const clockwiseMid = northness(start + 2);
+  const anticlockwiseMid = northness(start + 6);
+  if (clockwiseMid !== anticlockwiseMid) return clockwiseMid < anticlockwiseMid;
+  return (tieBreak & 1) === 0;
+}
+
 export function turnPath(
   from: SpriteDirection,
   to: SpriteDirection,
@@ -87,7 +109,7 @@ export function turnPath(
   // DIRECTIONS is in clockwise order, so the difference mod 8 is the number of
   // 45-degree steps one way and 8 minus that is the other.
   const forward = (end - start + 8) % 8;
-  const clockwise = forward === 4 ? (tieBreak & 1) === 0 : forward < 4;
+  const clockwise = forward === 4 ? aboutFaceClockwise(start, tieBreak) : forward < 4;
   const step = clockwise ? 1 : -1;
   const count = forward === 4 ? 4 : clockwise ? forward : 8 - forward;
 
@@ -125,6 +147,54 @@ export function facingFor(dx: number, dy: number, fallback: SpriteDirection = 'S
   return best;
 }
 
+/**
+ * The facings a cat is allowed to TRAVEL in: toward the camera, or across.
+ *
+ * A cat walking away from the camera does not read as a cat walking away. The
+ * walk cycle is one frame table shared by all eight facings, and what it
+ * encodes is a stride along the screen x axis — which is a stride in profile,
+ * a foreshortened stride at three-quarters, and in the two facings down the
+ * body axis a sideways sway with no fore-and-aft travel in it at all. Facing
+ * the camera the sway passes for a cat walking at you. Facing away, with the
+ * body sliding up the screen, the feet say one thing and the body says
+ * another, and the cat appears to moonwalk.
+ *
+ * So nothing travels north. A heading that would has its away component
+ * dropped and keeps its lateral one, which is the nearest facing that is
+ * still true about where the cat is going: a cat drifting a few points
+ * further up the plane walks there sideways, as cats mostly do anyway.
+ *
+ * This is a guard, not the whole fix — `driftTarget` keeps excursions
+ * lateral enough that the fold is rarely more than a rounding. It exists
+ * because the fold has to hold on any screen shape, and the zone ellipse
+ * only projects to a lateral one on the shapes we measured.
+ */
+const FORWARD_FOLD: Record<SpriteDirection, SpriteDirection | null> = {
+  S: 'S',
+  SE: 'SE',
+  E: 'E',
+  SW: 'SW',
+  W: 'W',
+  NE: 'E',
+  NW: 'W',
+  // Straight away from the camera has no lateral component to keep.
+  N: null,
+};
+
+/** Nearest facing to a direction of travel that a cat is willing to walk in. */
+export function walkFacing(
+  dx: number,
+  dy: number,
+  fallback: SpriteDirection = 'S',
+): SpriteDirection {
+  const folded = FORWARD_FOLD[facingFor(dx, dy, fallback)];
+  if (folded) return folded;
+  if (dx !== 0) return dx > 0 ? 'E' : 'W';
+  // Dead north with no lateral travel at all: carry on the way the cat was
+  // already pointing rather than inventing a side.
+  return FACING_VECTOR[fallback][0] < 0 ? 'W' : 'E';
+}
+
 // ---------------------------------------------------------------------------
 // Deterministic noise
 // ---------------------------------------------------------------------------
@@ -160,6 +230,27 @@ function noise(seed: number, salt: number): number {
 const ZONE_U = 0.035;
 const ZONE_DEPTH = 0.055;
 
+/**
+ * How far off horizontal an excursion may be aimed.
+ *
+ * The zone is already much wider than it is deep, but a POINT in it is not a
+ * HEADING to it: drawn uniformly over the ellipse, roughly one target in
+ * three sits near enough to straight up or straight down that the walk is
+ * mostly vertical, and the ones pointing up are the moonwalk. Aiming inside a
+ * wedge either side of horizontal puts every excursion in profile or close
+ * to it, which is both where the walk cycle reads best and where the eight-way
+ * art is strongest.
+ *
+ * Fifty degrees in zone space, which is far less in screen space: the zone is
+ * 0.084 of the world wide and 0.016 of the scene deep once the plane
+ * projection is applied, so a heading at the edge of the wedge arrives at
+ * atan(0.19 * (height / width) * tan 50) — about 16 degrees on a phone-shaped
+ * scene, inside the 22.5-degree bucket that snaps a heading to due east or
+ * west. The margin runs out somewhere past a scene 1.6 times as tall as the
+ * viewport is wide, which is why walkFacing guards rather than trusts this.
+ */
+const LATERAL_WEDGE = (50 * Math.PI) / 180;
+
 /** How long a cat rests between excursions, in ms. */
 const SETTLE_MIN = 5200;
 const SETTLE_SPREAD = 11000;
@@ -191,7 +282,10 @@ export interface DriftTarget {
  */
 export function driftTarget(seed: number, slot: number, index: number): DriftTarget {
   const salt = slot * 977 + index * 31;
-  const angle = noise(seed, salt) * Math.PI * 2;
+  // Left or right first, then how far off horizontal — rather than an angle
+  // anywhere on the circle. See LATERAL_WEDGE.
+  const side = noise(seed, salt + 2) < 0.5 ? 0 : Math.PI;
+  const angle = side + (noise(seed, salt) * 2 - 1) * LATERAL_WEDGE;
   // sqrt keeps the points uniform over the area; without it they bunch at the
   // centre and the cat appears to twitch rather than walk.
   const radius = Math.sqrt(noise(seed, salt + 1));
@@ -342,9 +436,41 @@ export const INTERACTIONS: Record<ItemCategory, readonly ActAnimation[]> = {
   decor: ['look', 'sniff', 'tailflick'],
 };
 
+/**
+ * What a cat does at a piece of the street.
+ *
+ * Items get their repertoire from their category, which works because a
+ * category is a promise about what the thing is for. Scenery has no
+ * categories and should not grow any — a bin, a hedge and a warm vent are
+ * not three instances of one idea, they are three jokes — so each prop says
+ * for itself what a cat does with it.
+ *
+ * The choices are the whole point of seating a cat here. A cat asleep on the
+ * warm air off a vent, a cat batting at a bin lid, a cat watching a birdbath
+ * it is not allowed to touch: each one is a sentence about the prop that the
+ * prop could not say by itself, and none of it is new art.
+ */
+const SCENERY_INTERACTIONS: Record<string, readonly ActAnimation[]> = {
+  scenery_bin: ['sniff', 'paw', 'look'],
+  scenery_crates: ['sleep', 'groom', 'look'],
+  // The warmest spot on the roof, which is why the cats found it first.
+  scenery_vent: ['sleep', 'yawn', 'groom'],
+  scenery_water_tank: ['look', 'sniff', 'tailflick'],
+  scenery_bush: ['sniff', 'paw', 'sleep'],
+  // Watching, not drinking. The regulars have feathers.
+  scenery_birdbath: ['look', 'tailflick', 'paw'],
+  scenery_laundry_pile: ['sleep', 'groom', 'yawn'],
+  scenery_soap_bottle: ['sniff', 'look', 'tailflick'],
+  scenery_lantern_pole: ['groom', 'look', 'tailflick'],
+  scenery_fruit_crate: ['sniff', 'eat', 'paw'],
+};
+
 /** The interaction set for whatever a cat is standing at, if anything. */
-export function interactionsFor(itemId: string | null | undefined): readonly ActAnimation[] {
-  if (!itemId) return [];
+export function interactionsFor(
+  itemId: string | null | undefined,
+  sceneryId?: string | null,
+): readonly ActAnimation[] {
+  if (!itemId) return sceneryId ? SCENERY_INTERACTIONS[sceneryId] ?? [] : [];
   const def = PLACEABLE_ITEMS.find((i) => i.item_id === itemId);
   return def ? INTERACTIONS[def.category] : [];
 }

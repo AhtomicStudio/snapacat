@@ -31,7 +31,7 @@ import {
   awayDuration,
   driftGeometry,
   driftTarget,
-  facingFor,
+  walkFacing,
   interactionsFor,
   napCycles,
   nextIdle,
@@ -75,6 +75,8 @@ export interface CatLifeInput {
    * it has available — a cat at a bowl eats, a cat at a toy bats at it.
    */
   atItemId?: string | null;
+  /** The piece of scenery it turned up for, for a cat the items had no room for. */
+  atSceneryId?: string | null;
   /** The cat's resting position across the world, 0…1. Used to pick an exit side. */
   baseX?: number;
   /** Friend Hoods and unmeasured scenes hold still. */
@@ -144,6 +146,7 @@ export function useCatLife({
   sceneHeight,
   asleep,
   atItemId,
+  atSceneryId,
   baseX = 0.5,
   enabled,
 }: CatLifeInput): CatLife {
@@ -207,7 +210,7 @@ export function useCatLife({
     /** How long this cat is content to stay put before wandering again. */
     let patience = settleDuration(seed, slot, 0);
     /** What this cat can do at the thing it came for. Empty on bare ground. */
-    const interactions = reduceMotion ? [] : interactionsFor(atItemId);
+    const interactions = reduceMotion ? [] : interactionsFor(atItemId, atSceneryId);
 
     const after = (ms: number, fn: () => void) => {
       timer = setTimeout(() => {
@@ -271,7 +274,7 @@ export function useCatLife({
       };
 
       const travelX = to.dx - from.dx;
-      const heading = facingFor(travelX, 0, facing);
+      const heading = walkFacing(travelX, 0, facing);
       // Roughly a steady walking pace rather than a fixed duration, or a
       // cat near the middle sprints and one near the edge crawls.
       const outMs = Math.min(9000, Math.max(1800, Math.abs(travelX) / 0.1));
@@ -309,7 +312,7 @@ export function useCatLife({
               legRef.current = { from: to, to: home };
               setLeg({ from: to, to: home });
               const backX = home.dx - to.dx;
-              facing = facingFor(backX, 0, 'S');
+              facing = walkFacing(backX, 0, 'S');
               setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
               Animated.timing(opacity, {
                 toValue: 1,
@@ -378,7 +381,7 @@ export function useCatLife({
       }
 
       legRef.current = { from, to };
-      const heading = facingFor(travelX, travelY, facing);
+      const heading = walkFacing(travelX, travelY, facing);
 
       setLeg({ from, to });
       // Take the nearer of the two depths for the whole walk. Paint order

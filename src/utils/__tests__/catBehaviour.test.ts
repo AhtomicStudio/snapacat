@@ -6,7 +6,9 @@ import {
   nextIdle,
   settleDuration,
   startupStagger,
+  interactionsFor,
   turnPath,
+  walkFacing,
   TURN_STEP_MS,
 } from '../catBehaviour';
 import { ACT_ANIMATIONS, DIRECTIONS, type ActAnimation } from '../../assets/sprites';
@@ -53,6 +55,47 @@ describe('facingFor', () => {
       const dir = facingFor(Math.cos(radians), Math.sin(radians));
       expect(DIRECTIONS).toContain(dir);
     }
+  });
+});
+
+describe('walkFacing', () => {
+  const AWAY = ['N', 'NE', 'NW'];
+
+  it('never sends a cat walking away from the camera', () => {
+    // The walk cycle is a stride along screen x shared by all eight facings.
+    // Pointed away, with the body sliding up the screen, the feet and the
+    // body disagree and the cat moonwalks.
+    for (let degrees = 0; degrees < 360; degrees += 1) {
+      const radians = (degrees * Math.PI) / 180;
+      expect(AWAY).not.toContain(walkFacing(Math.cos(radians), Math.sin(radians)));
+    }
+  });
+
+  it('keeps the lateral half of a heading that points away', () => {
+    expect(walkFacing(1, -1)).toBe('E');
+    expect(walkFacing(-1, -1)).toBe('W');
+    expect(walkFacing(0.2, -1)).toBe('E');
+    expect(walkFacing(-0.2, -1)).toBe('W');
+  });
+
+  it('leaves a heading that already faces the camera alone', () => {
+    for (const [dx, dy, want] of [
+      [0, 1, 'S'],
+      [1, 1, 'SE'],
+      [-1, 1, 'SW'],
+      [1, 0, 'E'],
+      [-1, 0, 'W'],
+    ] as const) {
+      expect(walkFacing(dx, dy)).toBe(want);
+    }
+  });
+
+  it('carries on the way the cat was pointing when travel is dead away', () => {
+    // Nothing in the travel says left or right, so inventing a side would
+    // make the cat pivot for no reason the player can see.
+    expect(walkFacing(0, -1, 'W')).toBe('W');
+    expect(walkFacing(0, -1, 'NW')).toBe('W');
+    expect(walkFacing(0, -1, 'SE')).toBe('E');
   });
 });
 
@@ -118,6 +161,18 @@ describe('turnPath', () => {
     expect(anticlockwise[anticlockwise.length - 1]).toBe('N');
   });
 
+  it('turns a cat about through the front, where there is a front', () => {
+    // Both ways round are four steps, so the only difference is what the
+    // player watches. Through S the cat sweeps its face across the camera;
+    // through N it shows its back for three frames.
+    for (const tie of [0, 1]) {
+      expect(turnPath('E', 'W', tie)).toEqual(['SE', 'S', 'SW', 'W']);
+      expect(turnPath('W', 'E', tie)).toEqual(['SW', 'S', 'SE', 'E']);
+      expect(turnPath('NE', 'SW', tie)).toEqual(['E', 'SE', 'S', 'SW']);
+      expect(turnPath('NW', 'SE', tie)).toEqual(['W', 'SW', 'S', 'SE']);
+    }
+  });
+
   it('ignores the tie-break when one way round is genuinely shorter', () => {
     for (const tie of [0, 1]) {
       expect(turnPath('S', 'E', tie)).toEqual(['SE', 'E']);
@@ -159,6 +214,26 @@ describe('driftTarget', () => {
     for (const slot of SLOTS) {
       for (let i = 0; i < 200; i++) {
         expect(driftTarget(SEED, slot, i).durationMs).toBeGreaterThanOrEqual(900);
+      }
+    }
+  });
+
+  it('aims laterally enough that the raw heading is never an away facing', () => {
+    // walkFacing guarantees this whatever the geometry; the wedge is what
+    // keeps it from having to intervene, so that excursions play in profile
+    // rather than being folded into one. Checked over the scene shapes a
+    // phone or tablet actually produces.
+    const AWAY = ['N', 'NE', 'NW'];
+    for (const aspect of [0.8, 1.0, 1.2, 1.4, 1.6]) {
+      const viewportWidth = 400;
+      const worldWidth = viewportWidth * 2.4;
+      const sceneHeight = viewportWidth * aspect;
+      for (const slot of SLOTS) {
+        for (let i = 0; i < 200; i++) {
+          const target = driftTarget(SEED, slot, i);
+          const { dy } = driftGeometry(0.5, target.dDepth, sceneHeight);
+          expect(AWAY).not.toContain(facingFor(target.du * worldWidth, dy));
+        }
       }
     }
   });
@@ -229,6 +304,24 @@ describe('nextIdle', () => {
     // the same commit and share a schedule read as one organism.
     const firstBeats = SLOTS.map((slot) => nextIdle(SEED, slot, 0));
     expect(new Set(firstBeats).size).toBeGreaterThan(1);
+  });
+});
+
+describe('interactionsFor', () => {
+  it('gives a cat something to do at the thing it came for', () => {
+    expect(interactionsFor('item_kibble_bowl')).toContain('eat');
+  });
+
+  it('gives a cat something to do at a piece of the street', () => {
+    // The whole reason a spare cat is seated at the scenery: a cat asleep
+    // on a warm vent says what the vent is for, and the vent cannot.
+    expect(interactionsFor(null, 'scenery_vent')).toContain('sleep');
+    expect(interactionsFor(null, 'scenery_bin')).toContain('sniff');
+  });
+
+  it('leaves a cat on bare ground to the general repertoire', () => {
+    expect(interactionsFor(null)).toEqual([]);
+    expect(interactionsFor(null, 'scenery_nonexistent')).toEqual([]);
   });
 });
 

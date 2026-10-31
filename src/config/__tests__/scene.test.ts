@@ -103,6 +103,99 @@ describe('layoutScene', () => {
     );
   });
 
+  /**
+   * The other half of the same loop, for the things the player did NOT put
+   * there. A Hood with two items and six cats spends most of its life with
+   * four cats standing on open asphalt, which is what made the scenery read
+   * as painted on the backdrop: nothing ever went near it.
+   */
+  it('seats spare cats at the scenery before using bare ground', () => {
+    const scenery = [
+      { id: 'scenery_crates', u: 0.6, depth: 0.14 },
+      { id: 'scenery_bin', u: 0.2, depth: 0.2 },
+    ];
+    const layout = layoutScene({
+      hoodId: 'hood_alpha',
+      placedItems: ['item_kibble_bowl'],
+      catCount: 3,
+      scenery,
+    });
+
+    const atScenery = layout.cats.filter((c) => c.atSceneryId !== null);
+    expect(atScenery).toHaveLength(2);
+    // Nearest prop first, as items are: an occupied look is worth most at
+    // the visible end of the plane.
+    expect(atScenery[0]!.atSceneryId).toBe('scenery_bin');
+    // And in front of the prop, or the cat is hidden behind the thing it
+    // came for.
+    expect(atScenery[0]!.z).toBeGreaterThan(0.2);
+  });
+
+  const HOODS = ['hood_alpha', 'hood_beta', 'hood_gamma', 'hood_delta', 'hood_eps'];
+
+  /**
+   * Scenery sits at fixed coordinates while anchors are seeded, so the two
+   * lattices eventually collide — caught on the alley, where a cat at the
+   * right-hand bin drew on top of a cat at the item beside it and the pair
+   * read as one two-headed sprite.
+   */
+  it('skips a prop that would stack a cat on something already there', () => {
+    const scenery = [
+      { id: 'scenery_bin', u: 0.5, depth: 0.2 },
+      { id: 'scenery_crates', u: 0.5, depth: 0.2 },
+    ];
+    for (const hoodId of HOODS) {
+      const layout = layoutScene({ hoodId, placedItems: [], catCount: 4, scenery });
+      const cats = layout.cats.filter((c) => c.atSceneryId !== null);
+      // Two props in the same place can only seat one cat between them.
+      expect(cats.length).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('keeps every cat at the scenery clear of everything else', () => {
+    // The real alley coordinates, which is where the overlap turned up.
+    const scenery = [
+      { id: 'scenery_bin', u: 0.12, depth: 0.2 },
+      { id: 'scenery_crates', u: 0.56, depth: 0.14 },
+      { id: 'scenery_bin', u: 0.86, depth: 0.26 },
+    ];
+    for (const hoodId of HOODS) {
+      for (let catCount = 1; catCount <= 6; catCount++) {
+        const layout = layoutScene({
+          hoodId,
+          placedItems: ['item_kibble_bowl', 'item_toy_mouse'],
+          catCount,
+          scenery,
+        });
+        const others = [...layout.items, ...layout.cats];
+        for (const cat of layout.cats) {
+          if (cat.atSceneryId === null) continue;
+          for (const other of others) {
+            if (other === cat) continue;
+            const clash =
+              Math.abs(other.x - cat.x) < 0.06 && Math.abs(other.y - cat.y) < 0.035;
+            expect(clash).toBe(false);
+          }
+        }
+      }
+    }
+  });
+
+  it('leaves the layout alone when the environment has no scenery', () => {
+    const bare = layoutScene({
+      hoodId: 'hood_alpha',
+      placedItems: ['item_kibble_bowl'],
+      catCount: 3,
+    });
+    const empty = layoutScene({
+      hoodId: 'hood_alpha',
+      placedItems: ['item_kibble_bowl'],
+      catCount: 3,
+      scenery: [],
+    });
+    expect(empty.cats).toEqual(bare.cats);
+  });
+
   it('spreads surplus cats onto bare ground', () => {
     const layout = layoutScene({
       hoodId: 'hood_alpha',

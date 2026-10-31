@@ -246,6 +246,15 @@ export interface CatPlacement extends Placement {
   slot: number;
   /** The item this cat turned up for, if any. Drives the tap-a-cat blurb. */
   atItemId: string | null;
+  /**
+   * The piece of scenery this cat turned up for, if any.
+   *
+   * Separate from `atItemId` rather than folded into it because the two
+   * answer to different owners: an item is the player’s and has a Shop
+   * record behind it, a bin belongs to the street and has none. The blurb
+   * that fires when you tap a cat looks the item up, and would find nothing.
+   */
+  atSceneryId: string | null;
 }
 
 /** A vacant anchor offered to the player as somewhere to put something. */
@@ -288,6 +297,17 @@ const CAT_FORWARD_STEP = 0.045;
 /** Lateral offset of a cat from its item, so the two don't sit dead centre. */
 const CAT_SIDE_STEP = 0.055;
 
+/**
+ * How close two actors may be drawn before they read as one.
+ *
+ * In plane coordinates, which are fractions of the world and of scene
+ * height. A cat at mid-depth is about 0.07 of the world wide, so anything
+ * inside that overlaps; the vertical figure is smaller because two sprites
+ * at different depths overlap less the further apart their baselines are.
+ */
+const ACTOR_CLEARANCE_X = 0.06;
+const ACTOR_CLEARANCE_Y = 0.035;
+
 export interface LayoutInput {
   /** Seed source — use the Hood id so a Hood always lays out the same way. */
   hoodId: string;
@@ -305,6 +325,21 @@ export interface LayoutInput {
    * map can go stale without stranding an anchor.
    */
   pinned?: Record<string, string>;
+  /**
+   * The environment’s fixed scenery, if it has any.
+   *
+   * Passed in rather than looked up so this module keeps knowing nothing
+   * about environments — the same reason it takes `placedItems` instead of
+   * reading a Hood.
+   */
+  scenery?: readonly SceneryHost[];
+}
+
+/** The part of a scenery prop the layout needs: where it is, and what it is. */
+export interface SceneryHost {
+  id: string;
+  u: number;
+  depth: number;
 }
 
 /**
@@ -315,7 +350,9 @@ export interface LayoutInput {
  * are the ones that look occupied — and only spread to bare anchors once every
  * item has a visitor.
  */
-export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInput): SceneLayout {
+export function layoutScene({
+  hoodId, placedItems, catCount, pinned, scenery,
+}: LayoutInput): SceneLayout {
   const seed = hashSeed(hoodId);
   const anchors = buildAnchors(seed);
 
@@ -373,7 +410,50 @@ export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInp
   // the scene than a cat at one barely visible against the horizon.
   const occupied = seated.sort((a, b) => b.anchor.depth - a.anchor.depth);
 
+  /**
+   * Scenery takes the cats the items could not.
+   *
+   * A cat with nothing to be at used to go to a bare anchor, where it stood
+   * on open ground doing the general repertoire. That is the state the Hood
+   * spends most of its time in — six cats, two or three items — and it is
+   * also what made the scenery read as decoration painted behind the game
+   * rather than as part of it. Nothing ever went near the bin.
+   *
+   * Seating a spare cat at a prop costs no new art and answers both at once:
+   * the cat has a reason to be where it is, and the prop is demonstrably
+   * something a cat uses. Nearest first, for the same reason items are —
+   * the visible end of the plane is where an occupied look is worth most.
+   */
+  const props = [...(scenery ?? [])].sort((a, b) => b.depth - a.depth);
+  /** Props already used, so two cats never claim the same bin. */
+  const claimedProps = new Set<number>();
+  /** Bare anchors already standing a cat. */
+  const usedBare = new Set<string>();
+
   const cats: CatPlacement[] = [];
+
+  /**
+   * Is something already drawn here?
+   *
+   * The scene has never needed this. Everything on the plane sat on the
+   * anchor lattice, and the lattice is spaced; two actors could not collide
+   * because two anchors do not. Scenery is NOT on the lattice — it sits at
+   * coordinates written by hand per environment — so the moment a cat is
+   * seated at a prop the guarantee is gone, and on the alley it went: a cat
+   * at the right-hand bin drew on top of a cat at the item beside it, and
+   * at this sprite size the pair read as one two-headed cat.
+   *
+   * Checked for bare anchors too, not just for props. A cat displaced onto
+   * bare ground can land on a cat already standing at a prop, which is the
+   * same collision arriving from the other direction.
+   */
+  const crowded = (x: number, y: number) =>
+    [...cats, ...items].some(
+      (other) =>
+        Math.abs(other.x - x) < ACTOR_CLEARANCE_X &&
+        Math.abs(other.y - y) < ACTOR_CLEARANCE_Y,
+    );
+
   for (let slot = 0; slot < catCount; slot++) {
     const host = occupied[slot];
     if (host) {
@@ -381,11 +461,25 @@ export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInp
       // way, which reads as a copy-paste.
       const side = slot % 2 === 0 ? 1 : -1;
       const depth = clamp01(host.anchor.depth + CAT_FORWARD_STEP);
-      const u = clamp01(host.anchor.u + side * CAT_SIDE_STEP);
+      /**
+       * The far side of the bowl if the near side is taken.
+       *
+       * A cat at an item cannot be moved elsewhere — standing at the thing
+       * you put down is the whole point of the loop — but which side of it
+       * the cat stands on is free, and two anchors a tenth of the world
+       * apart put the alternating sides of two cats in the same place.
+       * Flipping is the one adjustment available that costs the loop
+       * nothing. If both sides are busy the cat stays where it belongs and
+       * overlaps; being at the right item matters more than being clear.
+       */
+      const near = clamp01(host.anchor.u + side * CAT_SIDE_STEP);
+      const far = clamp01(host.anchor.u - side * CAT_SIDE_STEP);
+      const u = crowded(planeX(near, depth), planeY(depth)) ? far : near;
       cats.push({
         key: `cat_${host.anchor.id}`,
         slot,
         atItemId: host.itemId,
+        atSceneryId: null,
         x: planeX(u, depth),
         y: planeY(depth),
         scale: planeScale(depth),
@@ -394,17 +488,62 @@ export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInp
       continue;
     }
 
-    const spare = bare[slot - occupied.length];
-    if (!spare) break; // more cats than anchors — cannot happen at MAX_HOOD_CATS
-    cats.push({
-      key: `cat_${spare.id}`,
-      slot,
-      atItemId: null,
-      x: planeX(spare.u, spare.depth),
-      y: planeY(spare.depth),
-      scale: planeScale(spare.depth),
-      z: spare.depth,
-    });
+    // Alternate sides, as at an item, so two neighbours do not lean the
+    // same way.
+    const side = slot % 2 === 0 ? 1 : -1;
+    let placed = false;
+
+    // The nearest free prop with room beside it.
+    for (let i = 0; i < props.length; i++) {
+      if (claimedProps.has(i)) continue;
+      const prop = props[i]!;
+      const depth = clamp01(prop.depth + CAT_FORWARD_STEP);
+      // Either side of the prop will do before giving up on it.
+      const sides = [side, -side].map((d) => clamp01(prop.u + d * CAT_SIDE_STEP));
+      const u = sides.find((candidate) => !crowded(planeX(candidate, depth), planeY(depth)));
+      if (u === undefined) continue;
+      const x = planeX(u, depth);
+      const y = planeY(depth);
+      claimedProps.add(i);
+      cats.push({
+        key: `cat_scenery_${slot}`,
+        slot,
+        atItemId: null,
+        atSceneryId: prop.id,
+        x,
+        y,
+        scale: planeScale(depth),
+        z: depth,
+      });
+      placed = true;
+      break;
+    }
+    if (placed) continue;
+
+    // Open ground, in anchor order, first one with nobody on it.
+    for (const spare of bare) {
+      if (usedBare.has(spare.id)) continue;
+      const x = planeX(spare.u, spare.depth);
+      const y = planeY(spare.depth);
+      if (crowded(x, y)) continue;
+      usedBare.add(spare.id);
+      cats.push({
+        key: `cat_${spare.id}`,
+        slot,
+        atItemId: null,
+        atSceneryId: null,
+        x,
+        y,
+        scale: planeScale(spare.depth),
+        z: spare.depth,
+      });
+      placed = true;
+      break;
+    }
+    // Nowhere left that is not already occupied. Cannot happen at
+    // MAX_HOOD_CATS against this lattice, but a Hood is not the only
+    // caller and an unplaceable cat must not become a stacked one.
+    if (!placed) break;
   }
 
   /**
@@ -420,9 +559,8 @@ export function layoutScene({ hoodId, placedItems, catCount, pinned }: LayoutInp
    * cluster defeats the point, which is that panning somewhere new
    * should offer you something new.
    */
-  const catsOnBare = Math.max(0, catCount - occupied.length);
   const candidates = bare
-    .slice(catsOnBare)
+    .filter((a) => !usedBare.has(a.id))
     .filter((a) => a.depth >= SPOT_MIN_DEPTH)
     .sort((a, b) => a.u - b.u);
 
