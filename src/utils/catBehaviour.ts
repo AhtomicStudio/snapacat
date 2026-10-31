@@ -25,7 +25,7 @@
  * its time in the two facings with the least to show.
  */
 import { ACT_ANIMATIONS, DIRECTIONS, type ActAnimation, type SpriteDirection } from '../assets/sprites';
-import { planeY } from '../config/scene';
+import { ZONE_DEPTH, ZONE_U, planeY } from '../config/scene';
 import { PLACEABLE_ITEMS } from './spawnCalculator';
 import type { ItemCategory } from '../types';
 
@@ -217,18 +217,6 @@ function noise(seed: number, salt: number): number {
 // The zone
 // ---------------------------------------------------------------------------
 
-/**
- * Half-extents of a cat's wander zone, as fractions of the WORLD and of scene
- * height respectively.
- *
- * Lateral is roughly a cat and a half at mid-depth — far enough that the walk
- * is worth playing, near enough that the cat never loses its association with
- * the item it came for. Depth is deliberately a third of that: the plane is
- * only about a third of the screen tall, so equal extents would send cats
- * through the horizon.
- */
-const ZONE_U = 0.035;
-const ZONE_DEPTH = 0.055;
 
 /**
  * How far off horizontal an excursion may be aimed.
@@ -279,8 +267,20 @@ export interface DriftTarget {
  * reproducible — a Hood revisited behaves the same way, and a failure can be
  * replayed. The target is drawn in polar form so the distribution fills the
  * ellipse instead of clustering in its corners.
+ *
+ * `zone` is the fraction of the standard zone this cat may use, which the
+ * layout works out from how close its neighbours are — see `CatPlacement.zone`.
+ * It scales the ellipse rather than clipping it, so a hemmed-in cat still
+ * wanders in the same shape and with the same distribution, just less far.
+ * The seeded angle is untouched, so shrinking a zone never reshuffles a cat's
+ * schedule or sends it somewhere different.
  */
-export function driftTarget(seed: number, slot: number, index: number): DriftTarget {
+export function driftTarget(
+  seed: number,
+  slot: number,
+  index: number,
+  zone = 1,
+): DriftTarget {
   const salt = slot * 977 + index * 31;
   // Left or right first, then how far off horizontal — rather than an angle
   // anywhere on the circle. See LATERAL_WEDGE.
@@ -290,8 +290,9 @@ export function driftTarget(seed: number, slot: number, index: number): DriftTar
   // centre and the cat appears to twitch rather than walk.
   const radius = Math.sqrt(noise(seed, salt + 1));
 
-  const du = Math.cos(angle) * radius * ZONE_U;
-  const dDepth = Math.sin(angle) * radius * ZONE_DEPTH;
+  const scale = Math.max(0, Math.min(1, zone));
+  const du = Math.cos(angle) * radius * ZONE_U * scale;
+  const dDepth = Math.sin(angle) * radius * ZONE_DEPTH * scale;
 
   const distance = Math.hypot(du, dDepth);
   return {

@@ -79,6 +79,15 @@ export interface CatLifeInput {
   atSceneryId?: string | null;
   /** The cat's resting position across the world, 0…1. Used to pick an exit side. */
   baseX?: number;
+  /**
+   * How much of the standard wander zone this cat may use, 0…1, from the
+   * layout. A cat with close neighbours gets less, because the clearance the
+   * layout guarantees between resting cats is no bigger than the distance a
+   * cat can drift — so without this two cats walk into each other and read as
+   * one animal. Zero means stay put: `startWalk` already drops any excursion
+   * shorter than three points and settles again.
+   */
+  zone?: number;
   /** Friend Hoods and unmeasured scenes hold still. */
   enabled: boolean;
 }
@@ -148,6 +157,7 @@ export function useCatLife({
   atItemId,
   atSceneryId,
   baseX = 0.5,
+  zone = 1,
   enabled,
 }: CatLifeInput): CatLife {
   const reduceMotion = useReduceMotion();
@@ -351,7 +361,7 @@ export function useCatLife({
         startExcursion();
         return;
       }
-      const target = driftTarget(seed, slot, index);
+      const target = driftTarget(seed, slot, index, zone);
       const from = spot.current;
 
       /**
@@ -482,6 +492,7 @@ export function useCatLife({
     asleep,
     enabled,
     canWander,
+    zone,
     reduceMotion,
     progress,
   ]);

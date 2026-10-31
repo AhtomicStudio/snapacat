@@ -7,6 +7,8 @@ import {
   planeScale,
   planeX,
   planeY,
+  ZONE_DEPTH,
+  ZONE_U,
 } from '../scene';
 import { MAX_HOOD_CATS } from '../../utils/spawnCalculator';
 
@@ -179,6 +181,77 @@ describe('layoutScene', () => {
         }
       }
     }
+  });
+
+  it('does not let two cats drift into each other', () => {
+    /**
+     * The clearance above is about where cats STAND, and that was never the
+     * whole story: a cat then wanders up to its zone in every direction, and
+     * on the Back Alley at six cats the drift was as big as the gap. Two of
+     * the fifteen pairs could close to inside the clearance box without
+     * either cat doing anything unusual, which on screen is one cat drawn
+     * over another.
+     *
+     * This asserts the guarantee the clearance was assumed to give: take the
+     * worst case, both cats of a pair spending their whole budget straight at
+     * one another, and require that at least one axis still holds them apart.
+     */
+    const scenery = [
+      { id: 'scenery_bin', u: 0.12, depth: 0.2 },
+      { id: 'scenery_crates', u: 0.56, depth: 0.14 },
+      { id: 'scenery_bin', u: 0.86, depth: 0.26 },
+    ];
+    const reach = (depth: number) => ({
+      x: Math.abs(planeX(0.5 + ZONE_U, depth) - planeX(0.5, depth)),
+      y: Math.abs(planeY(Math.min(1, depth + ZONE_DEPTH)) - planeY(depth)),
+    });
+
+    for (const hoodId of HOODS) {
+      for (let catCount = 1; catCount <= 6; catCount++) {
+        const { cats } = layoutScene({
+          hoodId,
+          placedItems: ['item_kibble_bowl', 'item_toy_mouse'],
+          catCount,
+          scenery,
+        });
+        for (let i = 0; i < cats.length; i++) {
+          for (let j = i + 1; j < cats.length; j++) {
+            const a = cats[i]!;
+            const b = cats[j]!;
+            // A pair the placement loop had to stack has nothing to protect;
+            // a smaller zone cannot unstack it.
+            const stacked =
+              Math.abs(a.x - b.x) < 0.06 && Math.abs(a.y - b.y) < 0.035;
+            if (stacked) continue;
+
+            const ra = reach(a.z);
+            const rb = reach(b.z);
+            const closestX =
+              Math.abs(a.x - b.x) - ra.x * a.zone - rb.x * b.zone;
+            const closestY =
+              Math.abs(a.y - b.y) - ra.y * a.zone - rb.y * b.zone;
+            const canMeet = closestX < 0.06 && closestY < 0.035;
+            expect({ hoodId, catCount, pair: [a.key, b.key], canMeet }).toEqual({
+              hoodId,
+              catCount,
+              pair: [a.key, b.key],
+              canMeet: false,
+            });
+          }
+        }
+      }
+    }
+  });
+
+  it('only shrinks the zone of a cat that needs it', () => {
+    // A lone cat has nobody to avoid, so nothing should be taken off it —
+    // the fix must not quietly make every Hood calmer than it was.
+    const { cats } = layoutScene({
+      hoodId: 'hood_parking_lot',
+      placedItems: ['item_kibble_bowl'],
+      catCount: 1,
+    });
+    expect(cats[0]!.zone).toBe(1);
   });
 
   it('leaves the layout alone when the environment has no scenery', () => {

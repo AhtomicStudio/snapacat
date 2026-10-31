@@ -990,6 +990,8 @@ function SceneCat({
     // What it came for, which decides what it does while it is here.
     atItemId: placement.atItemId,
     atSceneryId: placement.atSceneryId,
+    // How far it may stray without walking into the cat next to it.
+    zone: placement.zone,
     enabled: alive,
   });
 

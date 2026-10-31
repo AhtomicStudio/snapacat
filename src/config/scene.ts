@@ -255,6 +255,21 @@ export interface CatPlacement extends Placement {
    * that fires when you tap a cat looks the item up, and would find nothing.
    */
   atSceneryId: string | null;
+  /**
+   * How much of the standard wander zone this cat may actually use, 0…1.
+   *
+   * The clearance below keeps cats apart where they STAND. It used to be the
+   * whole guarantee, and it was not one: a cat then wanders up to `ZONE_U` by
+   * `ZONE_DEPTH` around that spot, and on a real Hood the drift is the same
+   * size as the gap. Measured on the Back Alley at six cats, two of the
+   * fifteen pairs could close to inside the clearance box without either cat
+   * doing anything unusual — which is two cats drawn on the same few points,
+   * reading as one animal with two heads.
+   *
+   * So the layout hands each cat a budget. Scaled rather than clipped, so a
+   * crowded cat still wanders in the same shape, just less far.
+   */
+  zone: number;
 }
 
 /** A vacant anchor offered to the player as somewhere to put something. */
@@ -296,6 +311,50 @@ const CAT_FORWARD_STEP = 0.045;
 
 /** Lateral offset of a cat from its item, so the two don't sit dead centre. */
 const CAT_SIDE_STEP = 0.055;
+
+/**
+ * Half-extents of a cat's wander zone, as fractions of the WORLD and of depth.
+ *
+ * Lateral is roughly a cat and a half at mid-depth — far enough that the walk
+ * is worth playing, near enough that the cat never loses its association with
+ * the item it came for. Depth is deliberately a third of that: the plane is
+ * only about a third of the screen tall, so equal extents would send cats
+ * through the horizon.
+ *
+ * These live HERE, beside the clearance they have to respect, rather than in
+ * the behaviour layer that spends them. The layout is the only place that can
+ * see every cat at once, so it is the only place that can work out how much
+ * wandering each one can afford; catBehaviour imports them back.
+ */
+export const ZONE_U = 0.035;
+export const ZONE_DEPTH = 0.055;
+
+/**
+ * How far a cat at this depth can move on each axis, in plane coordinates,
+ * if it uses its whole zone.
+ *
+ * Not the same as the zone extents themselves. `u` is pre-perspective and
+ * `depth` is not a distance at all, so a zone of fixed extent covers less of
+ * the screen the further back it sits — which is exactly why the reach has to
+ * be measured through the projection rather than assumed.
+ */
+function driftReach(depth: number): { x: number; y: number } {
+  return {
+    x: Math.abs(planeX(0.5 + ZONE_U, depth) - planeX(0.5, depth)),
+    y: Math.abs(planeY(clamp01(depth + ZONE_DEPTH)) - planeY(depth)),
+  };
+}
+
+/**
+ * Below this, a zone is not worth having.
+ *
+ * A cat whose zone has been cut to a sliver would walk two or three points and
+ * stop, which reads as a twitch rather than as a cat — and `useCatLife`
+ * already drops any excursion shorter than three points and simply settles
+ * again. Rounding the sliver down to nothing makes that the explicit outcome
+ * instead of an accident of the geometry.
+ */
+const MIN_ZONE = 0.3;
 
 /**
  * How close two actors may be drawn before they read as one.
@@ -480,6 +539,8 @@ export function layoutScene({
         slot,
         atItemId: host.itemId,
         atSceneryId: null,
+        // Overwritten by the wander-budget pass below, once every cat is placed.
+        zone: 1,
         x: planeX(u, depth),
         y: planeY(depth),
         scale: planeScale(depth),
@@ -510,6 +571,8 @@ export function layoutScene({
         slot,
         atItemId: null,
         atSceneryId: prop.id,
+        // Overwritten by the wander-budget pass below, once every cat is placed.
+        zone: 1,
         x,
         y,
         scale: planeScale(depth),
@@ -532,6 +595,8 @@ export function layoutScene({
         slot,
         atItemId: null,
         atSceneryId: null,
+        // Overwritten by the wander-budget pass below, once every cat is placed.
+        zone: 1,
         x,
         y,
         scale: planeScale(spare.depth),
@@ -545,6 +610,53 @@ export function layoutScene({
     // caller and an unplaceable cat must not become a stacked one.
     if (!placed) break;
   }
+
+  /**
+   * How much each cat is allowed to wander, given who it is standing next to.
+   *
+   * A pair stays legible as two cats as long as ONE axis keeps them apart —
+   * side by side, or one clearly in front of the other. So for each pair we
+   * pick the axis that separates them best, measured in units of the drift
+   * that would close it, and require that axis to survive both cats using
+   * their whole budget:
+   *
+   *     reach(a) * zone(a) + reach(b) * zone(b)  <=  |separation| - clearance
+   *
+   * Taking the same budget for both sides of a pair makes that a bound on
+   * each, and a cat's budget is the tightest bound any of its neighbours
+   * imposes. Cutting both cats rather than one keeps the result independent
+   * of the order they were placed in, which matters because that order is
+   * seeded and otherwise invisible.
+   *
+   * The pair is left alone when neither axis has a positive margin. That only
+   * happens for cats the placement loop had to stack anyway — a cat at an item
+   * with both sides busy — and shrinking a zone cannot unstack them.
+   */
+  const budgets = cats.map(() => 1);
+  for (let i = 0; i < cats.length; i++) {
+    for (let j = i + 1; j < cats.length; j++) {
+      const a = cats[i]!;
+      const b = cats[j]!;
+      const ra = driftReach(a.z);
+      const rb = driftReach(b.z);
+      const axes = [
+        { margin: Math.abs(a.x - b.x) - ACTOR_CLEARANCE_X, reach: ra.x + rb.x },
+        { margin: Math.abs(a.y - b.y) - ACTOR_CLEARANCE_Y, reach: ra.y + rb.y },
+      ];
+      // The axis that buys the most room per unit of drift spent on it.
+      const best = axes.reduce((m, axis) =>
+        axis.margin / (axis.reach || 1e-9) > m.margin / (m.reach || 1e-9) ? axis : m,
+      );
+      if (best.margin <= 0) continue;
+      const allowed = best.reach > 0 ? Math.min(1, best.margin / best.reach) : 1;
+      budgets[i] = Math.min(budgets[i]!, allowed);
+      budgets[j] = Math.min(budgets[j]!, allowed);
+    }
+  }
+  cats.forEach((cat, i) => {
+    const budget = budgets[i]!;
+    cat.zone = budget < MIN_ZONE ? 0 : budget;
+  });
 
   /**
    * What is left over becomes somewhere to put something.
