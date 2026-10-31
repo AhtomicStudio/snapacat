@@ -29,20 +29,44 @@ export function mixHex(a: string, b: string, t: number): string {
 }
 
 /**
- * Darken toward near-black rather than to pure black.
+ * Shadow, which is COOL — and that is the whole point.
  *
- * Shading a warm colour toward #000 drags it grey, because every channel falls
- * at the same rate and the hue goes with it. Mixing toward a dark brown keeps
- * plaster and wood warm in shadow, which is the difference between a room at
- * dusk and a room with the colour drained out of it.
+ * This used to mix toward #2A211A, a warm dark brown, with a comment arguing
+ * that it kept plaster and wood warm in shadow. The intent was sound and the
+ * result was the opposite of the convention: measured on every real base
+ * colour in the game, the SHADED band came out yellower than the lit one. The
+ * apartment floor ran -1.2 on b*, the garden grass -1.3, a wood plank -2.1.
+ * Warm light with warm shadow is a single flat hue at two values, which is
+ * what "flat and muddy" means.
+ *
+ * Mixing toward a deep blue-violet instead puts roughly +7 b* between lit and
+ * shaded on the same surfaces, and costs at most 1.9 of L* at t=0.6, so no
+ * banded gradient jumps a step.
+ *
+ * NOT for material variation. A plank being a different colour from its
+ * neighbour is albedo, not lighting — use `vary()`, or you invent a light
+ * direction that does not exist and a fence reads as striped.
  */
 export function shade(hex: string, t: number): string {
-  return mixHex(hex, '#2A211A', t);
+  return mixHex(hex, '#23283F', t);
 }
 
-/** Lighten toward a warm white, for the same reason `shade` avoids black. */
+/** Highlight, warm, as the counterpart to `shade`'s cool. */
 export function tint(hex: string, t: number): string {
-  return mixHex(hex, '#FFF8EE', t);
+  return mixHex(hex, '#FFF6E2', t);
+}
+
+/**
+ * Material variation: the same surface, a different batch.
+ *
+ * Weathered timber, differently-cured concrete, tiles from two firings. These
+ * were going through `shade`/`tint`, which was wrong in a way that only shows
+ * once those two carry a hue: a hash picking between a warm and a cool version
+ * of a plank is not light falling on it, and shifting hue by hash makes a
+ * fence stripe. This moves value only and leaves hue where it was.
+ */
+export function vary(hex: string, t: number): string {
+  return mixHex(hex, t < 0 ? '#1A1A1A' : '#E8E8E8', Math.abs(t));
 }
 
 /**

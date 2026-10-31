@@ -54,7 +54,7 @@ import { propLight, propMotion, type PropMotion } from '../config/propMotion';
 import { sceneryFor, type SceneryProp } from '../config/scenery';
 import { Clouds, Fireflies, LightPool, Motes, StarField, moteStyleFor } from './SceneAmbience';
 import { font } from '../theme';
-import { mixHex, shade, tint, hashIndex } from '../utils/colour';
+import { mixHex, shade, tint, vary, hashIndex } from '../utils/colour';
 import { SoftBlob } from './SoftBlob';
 
 // ---------------------------------------------------------------------------
@@ -346,10 +346,10 @@ function MidWall({
                * the same wall every visit.
                */
               const n = (row * 31 + col * 17) % 9;
-              const tint = n === 0 ? '#000000' : n === 4 ? '#FFFFFF' : null;
+              const brickTint = n === 0 ? '#000000' : n === 4 ? '#FFFFFF' : null;
               return (
                 <React.Fragment key={col}>
-                  {tint && (
+                  {brickTint && (
                     <View
                       style={{
                         position: 'absolute',
@@ -357,8 +357,8 @@ function MidWall({
                         top: 1.5,
                         width: 24.5,
                         height: 10,
-                        backgroundColor: tint,
-                        opacity: tint === '#000000' ? 0.07 : 0.05,
+                        backgroundColor: brickTint,
+                        opacity: brickTint === '#000000' ? 0.07 : 0.05,
                       }}
                     />
                   )}
@@ -396,7 +396,7 @@ function MidWall({
                     top: 0,
                     width: 20.5,
                     height: wallHeight,
-                    backgroundColor: v > 0.64 ? tint(wall, 0.5) : shade(wall, 0.5),
+                    backgroundColor: vary(wall, v > 0.64 ? 0.5 : -0.5),
                     opacity: 0.05 + v * 0.07,
                   }}
                 />
@@ -465,7 +465,7 @@ function MidWall({
                         top: 1.5,
                         width: 18.5,
                         height: 18.5,
-                        backgroundColor: v > 0.65 ? tint(wall, 0.6) : shade(wall, 0.4),
+                        backgroundColor: vary(wall, v > 0.65 ? 0.6 : -0.4),
                         opacity: 0.04 + v * 0.07,
                       }}
                     />
@@ -519,7 +519,7 @@ function MidWall({
                     top: 0,
                     width: 86,
                     height: wallHeight,
-                    backgroundColor: v > 0.5 ? tint(wall, 0.5) : shade(wall, 0.45),
+                    backgroundColor: vary(wall, v > 0.5 ? 0.5 : -0.45),
                     opacity: 0.03 + v * 0.06,
                   }}
                 />
@@ -574,7 +574,7 @@ function MidWall({
                   width: 16 + v * 14,
                   height: 13 + u * 11,
                   borderRadius: 999,
-                  backgroundColor: v > 0.5 ? tint(wall, 0.3) : shade(wall, 0.35),
+                  backgroundColor: vary(wall, v > 0.5 ? 0.3 : -0.35),
                   opacity: 0.3,
                 }}
               />
@@ -641,7 +641,7 @@ function GroundDressing({
   seed,
   width,
   height,
-  tint,
+  speckle,
   base,
   style,
   dark,
@@ -649,7 +649,7 @@ function GroundDressing({
   seed: number;
   width: number;
   height: number;
-  tint: string;
+  speckle: string;
   /** Ground base colour, so blades can be lit against it. */
   base: string;
   style: GroundStyle;
@@ -756,7 +756,7 @@ function GroundDressing({
     return out;
   }, [seed, width, height, style]);
 
-  const blade = mixHex(base, '#FFF8EE', 0.26);
+  const blade = tint(base, 0.26);
 
   /**
    * Loose ballast on the roof deck.
@@ -784,8 +784,8 @@ function GroundDressing({
     return out;
   }, [seed, width, height, style]);
 
-  const stoneLight = mixHex(base, '#FFF8EE', 0.34);
-  const stoneDark = mixHex(base, '#2A211A', 0.30);
+  const stoneLight = tint(base, 0.34);
+  const stoneDark = shade(base, 0.30);
 
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width, height }}>
@@ -883,7 +883,7 @@ function GroundDressing({
                 bottom: 0,
                 width: 1.5,
                 height: j === 1 ? t.h : t.h * 0.72,
-                backgroundColor: t.light ? blade : tint,
+                backgroundColor: t.light ? blade : speckle,
                 opacity: dark ? 0.26 : 0.4,
                 transform: [{ rotate: `${deg}deg` }],
               }}
@@ -901,7 +901,7 @@ function GroundDressing({
             width: b.w,
             height: b.h,
             borderRadius: 1,
-            backgroundColor: tint,
+            backgroundColor: speckle,
             opacity: dark ? b.o * 0.7 : b.o,
           }}
         />
@@ -989,6 +989,7 @@ function SceneCat({
     asleep,
     // What it came for, which decides what it does while it is here.
     atItemId: placement.atItemId,
+    atSceneryId: placement.atSceneryId,
     enabled: alive,
   });
 
@@ -1131,8 +1132,171 @@ const STILL_MOTION: PropMotion = { kind: 'still' };
  * attached is a menu with a picture behind it. The reward for poking the
  * bin is finding out somebody keeps knocking the lid off.
  */
+/**
+ * What a prop is standing in.
+ *
+ * A prop drawn as a clean silhouette on top of a clean ground is a sticker,
+ * however good the art is and however carefully it is shaded — the giveaway
+ * is the unbroken contour where the object meets the floor, which is a line
+ * nothing in the real world has. The fix is as old as painting backdrops:
+ * put a little of the FLOOR in front of the OBJECT. A few chips of the same
+ * grit the ground is speckled with, overlapping the base by a couple of
+ * points, and the eye stops reading a cut-out and starts reading something
+ * sitting in the dirt.
+ *
+ * Made of the ground on purpose: the colours come from the environment’s own
+ * dressing, so the Garden gets blades of its own grass and the Alley gets
+ * grit off its own asphalt, and neither needs new art.
+ */
+/**
+ * Where a prop’s art meets the ground, as a fraction of its box height
+ * measured up from the bottom.
+ *
+ * Props are authored bottom-anchored on row 29 of a 32-row frame with the
+ * keyline dilated one row below that, so the lowest ink is row 30 and the
+ * contact line sits one row up from the bottom edge. Everything that has to
+ * meet the floor — the shadow, the grit — is placed from this rather than
+ * from the bottom of the box, which is a row and a half of empty frame lower
+ * and is where the first version put the shadow. It was entirely hidden.
+ */
+const PROP_BASE = 1 / 32;
+
+function PropSkirt({
+  size, ground, speckle, style, seed,
+}: {
+  size: number;
+  ground: string;
+  speckle: string;
+  style: GroundStyle;
+  seed: number;
+}) {
+  // Grass stands up, grit lies down, ballast is somewhere between. One
+  // component, three proportions — the shapes are the same Views either way.
+  //
+  // Sizes are set against the KEYLINE, which is one source pixel and so a
+  // thirty-second of the box. A chip the same height as the line it is
+  // meant to interrupt does not interrupt it; these are two to three times
+  // that, which is the smallest that reads at a glance on a phone.
+  const shape = style === 'grass'
+    ? { count: 7, w: 0.04, h: 0.1 }
+    : style === 'roofdeck'
+      ? { count: 6, w: 0.08, h: 0.05 }
+      : { count: 6, w: 0.11, h: 0.042 };
+
+  /**
+   * One source pixel of the art, in points.
+   *
+   * Everything below is snapped to it, and that matters more than it looks:
+   * the first version drew smooth rounded lozenges at whatever size the
+   * arithmetic produced, next to art whose every edge lands on a 32-grid.
+   * Two grey pills in front of a crate read as UI, not as gravel — the same
+   * one-medium problem the props were built to fix, reintroduced by the
+   * thing meant to seat them. Square, grid-aligned chips are made of the
+   * same stuff as everything else in the frame.
+   */
+  const unit = size / 32;
+  const snap = (v: number) => Math.max(unit, Math.round(v / unit) * unit);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: size * 0.2 }}
+    >
+      {Array.from({ length: shape.count }, (_, i) => {
+        const r = hashIndex(i, seed);
+        const r2 = hashIndex(i, seed + 31);
+        // Spread across the base and a little beyond it, because debris does
+        // not stop where the object does.
+        const w = snap(size * shape.w * (0.7 + r2 * 0.8));
+        const h = snap(size * shape.h * (0.7 + r * 0.7));
+        return (
+          <View
+            key={i}
+            style={{
+              position: 'absolute',
+              /**
+               * Spread by index with a little jitter, not by hash alone.
+               * Six independent draws across one width clump — measured on
+               * the alley crates, four of the six landed in the right third
+               * and read as one scuff rather than as scattered grit.
+               *
+               * Wider than the prop on purpose: debris does not stop where
+               * the object does.
+               */
+              left:
+                Math.round(
+                  (size * (0.06 + ((i + r * 0.8) / shape.count) * 0.88) - w / 2) / unit,
+                ) * unit,
+              /**
+               * On the floor, every one of them.
+               *
+               * They were jittered upward by a row or two as well, which put
+               * some of them two pixels INSIDE the crate — and a pale square
+               * sitting on a wooden plank does not read as a stone in front
+               * of the crate, it reads as a hole in it. Sitting on the bottom
+               * row, a chip one to two pixels tall reaches the keyline and
+               * no further, which is exactly the contour that needed
+               * breaking and nothing else.
+               */
+              bottom: 0,
+              width: w,
+              height: h,
+              // Mostly LIGHTER than the keyline, which is the whole job.
+              // The first version used the ground speckle for all of them —
+              // dark flecks laid over a dark outline, which is camouflage:
+              // the contour stayed unbroken and the chips read as dirt on
+              // the prop. One dark one in three keeps it from looking swept.
+              backgroundColor: r < 0.3 ? speckle : vary(ground, r2 * 0.18 - 0.03),
+              opacity: 0.92,
+            }}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * The shadow a prop casts on the ground it is standing on.
+ *
+ * Two patches rather than one disc. A single flat ellipse is the same
+ * mistake as a flat fill with a hard edge: real contact shadow is almost
+ * black in the millimetre where the object touches and fades to nothing
+ * within an object-width, and reproducing only the wide faint half leaves
+ * the prop hovering. The dark core is what welds it down.
+ */
+function PropShadow({ size, dark }: { size: number; dark: boolean }) {
+  const tone = dark ? '#060814' : '#30281E';
+  // Centred on the contact line rather than on the bottom of the box, and
+  // wider than the prop — a shadow that stops inside the silhouette is a
+  // shadow nobody can see.
+  const ground = size * (1 - PROP_BASE);
+  const halo = { w: size * 0.86, h: size * 0.17 };
+  const core = { w: size * 0.46, h: size * 0.085 };
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 }}>
+      <SoftBlob
+        left={(size - halo.w) / 2}
+        top={ground - halo.h * 0.58}
+        width={halo.w}
+        height={halo.h}
+        colour={tone}
+        peak={dark ? 0.22 : 0.14}
+      />
+      <SoftBlob
+        left={(size - core.w) / 2}
+        top={ground - core.h * 0.62}
+        width={core.w}
+        height={core.h}
+        colour={tone}
+        peak={dark ? 0.34 : 0.24}
+      />
+    </View>
+  );
+}
+
 function SceneryItem({
-  prop, size, left, top, dark, paused, onPoke,
+  prop, size, left, top, dark, paused, haze, dressing, onPoke,
 }: {
   prop: SceneryProp;
   size: number;
@@ -1140,25 +1304,33 @@ function SceneryItem({
   top: number;
   dark: boolean;
   paused: boolean;
+  /** The colour of the air between the camera and the back of the plane. */
+  haze: string;
+  dressing: SceneDressing;
   onPoke: (line: string) => void;
 }) {
   const art = getPropSheet(prop.id);
   const drift = useDrift(prop.motion ?? STILL_MOTION, Math.round(prop.u * 100), !paused);
 
   /**
-   * Atmospheric recession.
+   * Atmospheric recession, as a TINT and not as transparency.
    *
-   * Scenery sits between depth 0.10 and 0.26 and was being drawn at full
-   * contrast with the same hard keyline as a cat standing at the front of
-   * the plane — which is most of why it read as stickers laid on the
-   * ground rather than as part of the place. Letting a little of the
-   * ground through softens the keyline and pushes it back, for the price
-   * of one number. Same principle as the hazed skyline rows.
+   * This was `opacity`, which is the wrong operation twice over. Fading a
+   * prop over a darker ground makes it darker rather than hazier, so it
+   * recedes by going murky; and it lets the floor show through the middle
+   * of a solid bin, which is not distance, it is a ghost. The pasted-on
+   * look survived the fade because the thing that reads as pasted is the
+   * keyline — a prop carries one fixed near-black outline whatever is
+   * behind it, and 20% transparency turns that into a slightly paler fixed
+   * near-black outline.
+   *
+   * Air has a colour. Drawing the same art again on top, flooded with the
+   * colour of the air and held to the silhouette by its own alpha, mixes
+   * every tone in the prop — keyline included — toward the light it is
+   * sitting in, at full opacity. That is what aerial perspective is, and a
+   * tinted copy of an image Metro has already decoded is close to free.
    */
-  // Measured, 0.84 + depth*0.5 gave 0.89 at the far end and 0.97 at the near
-  // one — an eight-point spread that moved the keyline by one to three points
-  // of value. Invisible. The range has to be wide enough to see.
-  const recede = 0.72 + Math.min(prop.depth, 0.3) * 0.67;
+  const hazeAmount = Math.max(0.05, 0.34 - Math.min(prop.depth, 0.3) * 0.95);
 
   const nudge = useRef(new Animated.Value(0)).current;
 
@@ -1194,17 +1366,41 @@ function SceneryItem({
         scaleTo={0.94}
         style={{ width: size, height: size, alignItems: 'center', justifyContent: 'flex-end' }}
       >
-        <ContactShadow size={size} dark={dark} />
-        <Animated.Image
-          source={art}
-          resizeMode="contain"
-          fadeDuration={0}
+        <PropShadow size={size} dark={dark} />
+        <Animated.View
           style={{
             width: size,
             height: size,
-            opacity: recede,
             transform: [...drift, { translateY: nudge }],
           }}
+        >
+          <Image
+            source={art}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={{ width: size, height: size }}
+          />
+          <Image
+            source={art}
+            resizeMode="contain"
+            fadeDuration={0}
+            style={{
+              position: 'absolute',
+              width: size,
+              height: size,
+              tintColor: haze,
+              opacity: hazeAmount,
+            }}
+          />
+        </Animated.View>
+        {/* In front of the prop, and NOT carried by the drift: a swaying
+            lantern does not take the ground with it. */}
+        <PropSkirt
+          size={size}
+          ground={dressing.ground}
+          speckle={dressing.speckle}
+          style={dressing.groundStyle}
+          seed={Math.round(prop.u * 977)}
         />
       </Touchable>
     </View>
@@ -1492,14 +1688,34 @@ export function HoodScene({
   // should not be able to put 30 sprites on screen.
   const catCount = Math.max(0, Math.min(MAX_HOOD_CATS, expectedCats));
 
+  const scenery = useMemo(() => sceneryFor(envId), [envId]);
+
   const layout = useMemo(
-    () => layoutScene({ hoodId, placedItems, catCount: spritesLoading ? 0 : catCount, pinned: itemAnchors }),
-    [hoodId, placedItems, catCount, spritesLoading, itemAnchors],
+    () => layoutScene({
+      hoodId,
+      placedItems,
+      catCount: spritesLoading ? 0 : catCount,
+      pinned: itemAnchors,
+      scenery,
+    }),
+    [hoodId, placedItems, catCount, spritesLoading, itemAnchors, scenery],
   );
 
   const actors = useMemo(() => paintOrder(layout), [layout]);
 
-  const scenery = useMemo(() => sceneryFor(envId), [envId]);
+  /**
+   * The colour of the air on the ground plane.
+   *
+   * Mostly the light pooling at the horizon, which is where the sky and the
+   * plane meet and so is what anything at the back of the plane is seen
+   * through. Pulled some of the way toward the ground because the last few
+   * feet of that air sit over a floor and pick up what bounces off it —
+   * haze over grass is green in a way haze over asphalt is not.
+   */
+  const haze = useMemo(
+    () => mixHex(palette.low, dressing.ground, 0.38),
+    [palette.low, dressing.ground],
+  );
 
   /**
    * The line the last-tapped piece of scenery is saying.
@@ -1700,7 +1916,7 @@ export function HoodScene({
                   seed={seed}
                   width={worldW}
                   height={height - horizonY}
-                  tint={dressing.speckle}
+                  speckle={dressing.speckle}
                   base={dressing.ground}
                   style={dressing.groundStyle}
                   dark={dark}
@@ -1760,6 +1976,8 @@ export function HoodScene({
                     top={planeY(prop.depth) * height - size}
                     dark={dark}
                     paused={paused}
+                    haze={haze}
+                    dressing={dressing}
                     onPoke={setSceneryLine}
                   />
                 );

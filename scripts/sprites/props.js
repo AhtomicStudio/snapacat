@@ -179,15 +179,54 @@ function shade(c, tones) {
   }
 }
 
+const KEYLINE_CACHE = new Map();
+
+/**
+ * The keyline for a material: its own colour, taken down hard and turned
+ * toward the shadow end of the palette.
+ *
+ * Every prop used to be wrapped in one flat #2B2B33 — a near-black that
+ * belongs to no material in the game and sits in none of the environments.
+ * That single colour is most of why the props read as stickers dropped onto
+ * the scene rather than as things in it: a bin, a hedge and a bottle of
+ * lavender soap were all outlined in the same cold grey, so whatever was
+ * behind them, the outline was a foreign object.
+ *
+ * The cats never did this. A cat’s outline is derived from its coat (see
+ * shadeRamp in slots.js), which is why a cream cat is wrapped in soft violet
+ * and a black cat in lit slate, and why both sit in the frame instead of on
+ * it. Props get the same treatment from the same reasoning — 52% down and a
+ * third of the way toward a deep blue-violet, so the line stays a shadow of
+ * the material rather than becoming a different material.
+ */
+function keyline(col) {
+  const hit = KEYLINE_CACHE.get(col);
+  if (hit) return hit;
+  const h = col.replace('#', '');
+  const channel = (i, target) => {
+    const v = parseInt(h.slice(i * 2, i * 2 + 2), 16) * 0.48;
+    return Math.round(v + (target - v) * 0.34);
+  };
+  const out =
+    '#' +
+    [channel(0, 0x24), channel(1, 0x1c), channel(2, 0x3a)]
+      .map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0'))
+      .join('');
+  KEYLINE_CACHE.set(col, out);
+  return out;
+}
+
 /** 1px keyline dilated outward into transparency. Never erodes the shape. */
 function outline(c) {
   const src = c.slice();
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       if (at(src, x, y)) continue;
-      const touches =
-        at(src, x - 1, y) || at(src, x + 1, y) || at(src, x, y - 1) || at(src, x, y + 1);
-      if (touches) px(c, x, y, OUTLINE);
+      // Whichever material this pixel is wrapping. Up and left first so a
+      // shape lit from the upper left keys its outline off the lit face.
+      const neighbour =
+        at(src, x, y - 1) || at(src, x - 1, y) || at(src, x + 1, y) || at(src, x, y + 1);
+      if (neighbour) px(c, x, y, keyline(neighbour));
     }
   }
 }

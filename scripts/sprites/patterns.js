@@ -35,6 +35,38 @@ function setPose(pose) {
   return previous;
 }
 
+/**
+ * Where each pixel sits on the CAT, as opposed to where it sits in the frame.
+ *
+ * Every painter below is a statement about anatomy — a bar down the flank, a
+ * bib on the chest, a patch over one eye — and every one of them was evaluated
+ * at the pixel's position in the 32x32 frame. For the sit rig those are the
+ * same thing, because nothing moves. For an animated, part-composed frame they
+ * are not: the body bobs a pixel on the passing frames, the legs shear, the
+ * tail swings. The markings stayed where they were in the FRAME while the cat
+ * moved underneath them, so a calico's patches crawled over its own fur every
+ * time it took a step — the one thing that cannot happen, since the markings
+ * are the fur.
+ *
+ * The compositor knows each pixel's REST position: where that part pixel sits
+ * with the animation offsets taken out. Published here, the painters ask the
+ * cat where they are instead of asking the frame, and a patch stays on the
+ * same follicle in all four walk frames.
+ *
+ * Null for the whole-frame sit rig, where frame space IS body space.
+ */
+let SPACE = null;
+
+/** Swaps the active body frame and returns the previous one, for restoring. */
+function setSpace(space) {
+  const previous = SPACE;
+  SPACE = space || null;
+  return previous;
+}
+
+const bodyX = (x, y) => (SPACE ? SPACE.bx[idx(x, y)] : x);
+const bodyY = (x, y) => (SPACE ? SPACE.by[idx(x, y)] : y);
+
 /** Coat slot -> marking slot, preserving the underlying shading band. */
 const PATTERN_FOR = {
   [SLOT.COAT_LIGHT]: SLOT.PATTERN_LIGHT,
@@ -62,7 +94,7 @@ const isCoat = (slot) => PATTERN_FOR[slot] !== undefined;
  * atlas tags only the literal nose patch and leaves the rest to the pose. Both
  * have to be honoured or the composited heads get bars across their eyes.
  */
-const skipFace = (x, y) => REGIONS.isMuzzle(x, y) || POSE.faceClear(x, y);
+const skipFace = (bx, by, px, py) => REGIONS.isMuzzle(px, py) || POSE.faceClear(bx, by);
 
 /** Deterministic value noise in 0..1 — same input always yields the same patch. */
 function hash2(x, y) {
@@ -71,13 +103,31 @@ function hash2(x, y) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** Iterates coat pixels, letting the callback decide the marking slot. */
+/**
+ * Iterates coat pixels, letting the callback decide the marking slot.
+ *
+ * TWO COORDINATE SYSTEMS, AND WHICH ONE TO ASK
+ *
+ * `x, y` are BODY coordinates — where this pixel sits on the cat. Every
+ * question about a marking takes these: where the spine runs, how far down the
+ * flank we are, which ring of the tail this is. They are what holds a pattern
+ * still while the cat walks.
+ *
+ * `px, py` are the pixel's actual place in the frame. Two kinds of query want
+ * those instead: anything that reads the buffer, and REGIONS — which on a
+ * composited frame IS a buffer, written by the compositor as it laid the parts
+ * down. Ask REGIONS a body-space question and it answers about another part.
+ *
+ * With no body frame installed the two are identical, which is why the sit-rig
+ * sheets come out byte for byte as they were.
+ */
 function eachCoat(buf, fn) {
-  for (let y = 0; y < FRAME_SIZE; y++) {
-    for (let x = 0; x < FRAME_SIZE; x++) {
-      const i = idx(x, y);
+  for (let py = 0; py < FRAME_SIZE; py++) {
+    for (let px = 0; px < FRAME_SIZE; px++) {
+      const i = idx(px, py);
       if (!isCoat(buf[i])) continue;
-      fn(x, y, i, buf[i]);
+      if (SPACE) fn(SPACE.bx[i], SPACE.by[i], i, buf[i], px, py);
+      else fn(px, py, i, buf[i], px, py);
     }
   }
 }
@@ -103,11 +153,11 @@ const markWhite = (buf, i) => {
  * stopped the profile frames rendering as wood grain.
  */
 function paintTabby(buf) {
-  eachCoat(buf, (x, y, i) => {
-    if (skipFace(x, y)) return;
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (skipFace(x, y, px, py)) return;
 
     // The tail gets rings, not a continuous vertical seam.
-    if (REGIONS.isTail(x, y)) {
+    if (REGIONS.isTail(px, py)) {
       if (y % 4 < 2) mark(buf, i);
       return;
     }
@@ -124,7 +174,7 @@ function paintTabby(buf) {
     }
     // Dark ear backs with a paler thumbprint. Lands at the top of the sprite
     // where a solid-coloured breed has no structure at all.
-    if (REGIONS.isEar(x, y) && POSE.earMark(x, y)) {
+    if (REGIONS.isEar(px, py) && POSE.earMark(x, y)) {
       mark(buf, i);
       return;
     }
@@ -139,9 +189,9 @@ function paintTabby(buf) {
 
 /** Classic tabby: two off-centre shoulder swirls, which read as marbling. */
 function paintClassicTabby(buf) {
-  eachCoat(buf, (x, y, i) => {
-    if (skipFace(x, y)) return;
-    if (REGIONS.isTail(x, y)) {
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (skipFace(x, y, px, py)) return;
+    if (REGIONS.isTail(px, py)) {
       if (y % 4 < 2) mark(buf, i);
       return;
     }
@@ -185,8 +235,8 @@ function paintClassicTabby(buf) {
 
 /** Spotted: a scattered dot field. */
 function paintSpotted(buf) {
-  eachCoat(buf, (x, y, i) => {
-    if (skipFace(x, y)) return;
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (skipFace(x, y, px, py)) return;
     if (hash2(x >> 1, y >> 1) > 0.62) mark(buf, i);
   });
 }
@@ -197,8 +247,8 @@ function paintSpotted(buf) {
  * bald patch.
  */
 function paintBicolor(buf) {
-  eachCoat(buf, (x, y, i) => {
-    if (POSE.bib(x, y) || REGIONS.isPaw(x, y)) markWhite(buf, i);
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (POSE.bib(x, y) || REGIONS.isPaw(px, py)) markWhite(buf, i);
   });
 }
 
@@ -208,8 +258,8 @@ function paintBicolor(buf) {
  */
 function paintBicolorInverted(buf) {
   const dark = [];
-  eachCoat(buf, (x, y, i) => {
-    if (POSE.eyePatch(x, y) || POSE.flankPatch(x, y) || REGIONS.isTail(x, y)) dark.push(i);
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (POSE.eyePatch(x, y) || POSE.flankPatch(x, y) || REGIONS.isTail(px, py)) dark.push(i);
     else markWhite(buf, i);
   });
   for (const i of dark) mark(buf, i);
@@ -221,14 +271,14 @@ function paintBicolorInverted(buf) {
  * and made tortoiseshell and torbie indistinguishable.
  */
 function paintTortie(buf) {
-  eachCoat(buf, (x, y, i) => {
-    if (skipFace(x, y)) return;
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
+    if (skipFace(x, y, px, py)) return;
 
     // Torties famously have a split face. Nothing else on the sheet has this,
     // so it becomes the breed's signature read at small size. The pose decides
     // which half is near — side-on, `x >= 16` is every head pixel there is, and
     // the signature read becomes a solid head.
-    if (REGIONS.isHead(x, y)) {
+    if (REGIONS.isHead(px, py)) {
       if (POSE.faceNear(x, y)) mark(buf, i);
       return;
     }
@@ -252,10 +302,12 @@ function paintTortie(buf) {
  * apart, which is a collision at display size.
  */
 function paintTortieBars(buf) {
-  for (let y = 0; y < FRAME_SIZE; y++) {
-    for (let x = 0; x < FRAME_SIZE; x++) {
-      const i = idx(x, y);
-      if (skipFace(x, y)) continue;
+  for (let py = 0; py < FRAME_SIZE; py++) {
+    for (let px = 0; px < FRAME_SIZE; px++) {
+      const i = idx(px, py);
+      const x = bodyX(px, py);
+      const y = bodyY(px, py);
+      if (skipFace(x, y, px, py)) continue;
 
       if ((Math.round(POSE.stripeTortie(x, y)) + 64) % 7 >= 3) continue;
 
@@ -270,14 +322,14 @@ function paintTortieBars(buf) {
 /** Colourpoint: dark extremities — ears, muzzle, paws, tail. */
 function paintPointed(buf, { lynx = false } = {}) {
   const pointed = [];
-  eachCoat(buf, (x, y, i) => {
+  eachCoat(buf, (x, y, i, _slot, px, py) => {
     if (
-      REGIONS.isEar(x, y) ||
-      REGIONS.isTail(x, y) ||
-      REGIONS.isPaw(x, y) ||
+      REGIONS.isEar(px, py) ||
+      REGIONS.isTail(px, py) ||
+      REGIONS.isPaw(px, py) ||
       POSE.muzzlePoint(x, y)
     ) {
-      pointed.push([x, y, i]);
+      pointed.push([x, y, i, px, py]);
     }
   });
   for (const [, , i] of pointed) mark(buf, i);
@@ -285,8 +337,8 @@ function paintPointed(buf, { lynx = false } = {}) {
   // A lynx point is a colourpoint WITH tabby bars inside the points — without
   // them it is just a paler seal_point.
   if (!lynx) return;
-  for (const [x, y, i] of pointed) {
-    if (POSE.lynxBar(x, y) || (REGIONS.isTail(x, y) && y % 4 < 2)) {
+  for (const [x, y, i, px, py] of pointed) {
+    if (POSE.lynxBar(x, y) || (REGIONS.isTail(px, py) && y % 4 < 2)) {
       buf[i] = SLOT.PATTERN_LIGHT;
     }
   }
@@ -362,4 +414,4 @@ function applyPattern(frame, breed) {
   return out;
 }
 
-module.exports = { applyPattern, setPose };
+module.exports = { applyPattern, setPose, setSpace };

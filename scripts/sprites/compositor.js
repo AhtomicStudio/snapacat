@@ -53,6 +53,19 @@ function compose(dir, animName, frameIdx, atlas) {
   // answer at all: --parts reported every leg painting healthy counts while
   // legFL in E rendered zero visible pixels.
   const partBuf = new Uint8Array(FRAME_SIZE * FRAME_SIZE);
+  /**
+   * Where each painted pixel sits on the cat, with this frame’s animation
+   * offsets taken back out.
+   *
+   * The pattern painters need it. A marking is a fact about the fur, so it has
+   * to be evaluated against the part that carries it rather than against the
+   * frame the part happens to be standing in this tick — otherwise the body
+   * bobs a pixel on the passing frames and every patch on the cat shifts one
+   * follicle sideways. Signed, because a part displaced right has rest columns
+   * below zero.
+   */
+  const restX = new Int8Array(FRAME_SIZE * FRAME_SIZE);
+  const restY = new Int8Array(FRAME_SIZE * FRAME_SIZE);
 
   for (const partId of drawOrder) {
     const anchor = anchors[partId];
@@ -84,6 +97,9 @@ function compose(dir, animName, frameIdx, atlas) {
     const { ax, ay } = cell;
     const fx = root.x + anchor[0] + dx - ax;
     const fy = root.y + anchor[1] + dy - ay;
+    // The same origin with the animation taken out: the part at rest.
+    const bx = root.x + anchor[0] - ax;
+    const by = root.y + anchor[1] - ay;
 
     const span = cell.h > 1 ? cell.h - 1 : 1;
 
@@ -99,6 +115,8 @@ function compose(dir, animName, frameIdx, atlas) {
         buf[idx(px, py)] = slot;
         regionBuf[idx(px, py)] = cell.regions[cy * cell.w + cx];
         partBuf[idx(px, py)] = PART_IDS.indexOf(partId) + 1;
+        restX[idx(px, py)] = bx + cx;
+        restY[idx(px, py)] = by + cy;
       }
     }
   }
@@ -112,6 +130,11 @@ function compose(dir, animName, frameIdx, atlas) {
         const tmpS = buf[l]; buf[l] = buf[r]; buf[r] = tmpS;
         const tmpR = regionBuf[l]; regionBuf[l] = regionBuf[r]; regionBuf[r] = tmpR;
         const tmpP = partBuf[l]; partBuf[l] = partBuf[r]; partBuf[r] = tmpP;
+        // Rest columns reflect as well as swap — poseFor() mirrors the body
+        // frame by asking the unmirrored pose about `31 - x`, and these have
+        // to arrive in the same convention or the two cancel out.
+        const tmpX = restX[l]; restX[l] = FRAME_SIZE - 1 - restX[r]; restX[r] = FRAME_SIZE - 1 - tmpX;
+        const tmpY = restY[l]; restY[l] = restY[r]; restY[r] = tmpY;
       }
     }
   }
@@ -137,7 +160,7 @@ function compose(dir, animName, frameIdx, atlas) {
     ? { ...baseShadow, cx: FRAME_SIZE - 1 - baseShadow.cx }
     : { ...baseShadow };
 
-  return { buf, regionBuf, partBuf, whiskers, shadow };
+  return { buf, regionBuf, partBuf, whiskers, shadow, restX, restY };
 }
 
 // ---------------------------------------------------------------------------
@@ -220,9 +243,9 @@ function regionsFromBuf(regionBuf) {
  * The pose is looked up for the SOURCE direction and then mirrored if the frame
  * was, because compose() flips the buffer before this runs.
  */
-function applyPatternDir(buf, breed, regionBuf, source, mirror) {
+function applyPatternDir(buf, breed, regionBuf, source, mirror, rest) {
   const rig = require('./rig');
-  const { applyPattern, setPose } = require('./patterns');
+  const { applyPattern, setPose, setSpace } = require('./patterns');
   const { poseFor } = require('./poses');
 
   // Save original region functions
@@ -238,6 +261,9 @@ function applyPatternDir(buf, breed, regionBuf, source, mirror) {
   }
 
   const savedPose = setPose(poseFor(source, mirror));
+  // The third swap: where each pixel sits on the cat. Without it the markings
+  // are painted at frame positions and the cat walks out from under them.
+  const savedSpace = setSpace(rest || null);
 
   let result;
   try {
@@ -248,6 +274,7 @@ function applyPatternDir(buf, breed, regionBuf, source, mirror) {
       rig.REGIONS[key] = saved[key];
     }
     setPose(savedPose);
+    setSpace(savedSpace);
   }
 
   return result;
@@ -268,14 +295,15 @@ function applyPatternDir(buf, breed, regionBuf, source, mirror) {
  * @returns {{ buf: Uint8Array, whiskers: number[][], shadow: object }}
  */
 function renderFrame(dir, animName, frameIdx, atlas, breed) {
-  const { buf, regionBuf, whiskers, shadow } = compose(dir, animName, frameIdx, atlas);
+  const { buf, regionBuf, whiskers, shadow, restX, restY } =
+    compose(dir, animName, frameIdx, atlas);
   const { source, mirror } = RESOLVE[dir];
 
   // Shading pipeline
   shadeComposite(buf, regionBuf);
 
   // Pattern painting with direction-aware regions and body frame
-  const patterned = applyPatternDir(buf, breed, regionBuf, source, mirror);
+  const patterned = applyPatternDir(buf, breed, regionBuf, source, mirror, { bx: restX, by: restY });
 
   return { buf: patterned, whiskers, shadow };
 }

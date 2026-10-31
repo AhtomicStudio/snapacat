@@ -314,6 +314,7 @@ const Floor = React.memo(function Floor({
             style={{
               position: 'absolute', top: 0, bottom: 0,
               left: i * boardW, width: boardW,
+              // Per-board albedo, not lighting — see vary() in utils/colour.
               backgroundColor: mixHex(base, plank, 0.03 + v * 0.13),
             }}
           >

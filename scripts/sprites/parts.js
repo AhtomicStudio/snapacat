@@ -302,14 +302,17 @@ function buildHead_S(variant) {
   const shut = variant === HEAD_V.SHUT || variant === HEAD_V.YAWN || variant === HEAD_V.LICK;
 
   /**
-   * The brow line above the eyes — on the OPEN poses only.
+   * There is no brow line any more.
    *
-   * It is the top edge of an open eye, and stacking it above a closed lid is
-   * what turned sleeping cats into skulls: brow at y11, lid at y12 and y13
-   * gave three solid dark rows in each socket, which at display size is not an
-   * eyelid, it is a hole.
+   * It used to run along y11 on open poses as the top edge of the eye. Once
+   * the eye grew into that row it became a lid sitting on the iris, which is
+   * exactly the half-closed look the pupil work exists to remove. The eye
+   * defines its own top edge now.
+   *
+   * (Keeping the history: stacking this brow above a CLOSED lid is what once
+   * turned sleeping cats into skulls — three solid dark rows per socket. That
+   * is why the shut branch below draws a single wide line and nothing else.)
    */
-  if (!shut) fspanMirror(11, 11, 13, SLOT.OUTLINE_SOFT, R.HEAD);
 
   if (shut) {
     /**
@@ -339,15 +342,49 @@ function buildHead_S(variant) {
     fset(11, 13, SLOT.EYE_DARK, R.HEAD);
     fset(20, 13, SLOT.EYE_DARK, R.HEAD);
   } else {
-    // Eyes open
-    for (let y = 12; y <= 13; y++) {
+    /**
+     * Eyes open — a round eye with a pupil in it.
+     *
+     * This was a 3x2 flat lozenge of iris with a dark pixel at the lower
+     * outer corner and a soft-outline bar sitting on top of it. That is
+     * the pixel-art grammar for SQUINTING, and it meant all twenty breeds
+     * looked mildly unimpressed with the player in every frame. The slot
+     * was even named for a pupil; the geometry never drew one.
+     *
+     * Three rows instead of two, the brow bar gone (see the !shut guard
+     * above), and one near-black pixel at the centre. A pupil is the
+     * difference between a cat with eyes and a cat that is looking at you,
+     * and it is the cheapest character work available on this rig.
+     *
+     * It also unlocks gaze: move that single pixel one column and the cat
+     * is looking somewhere, which is what `look` has always needed.
+     */
+    for (let y = 11; y <= 13; y++) {
       fspan(y, 11, 13, SLOT.EYE, R.HEAD);
       fspan(y, 18, 20, SLOT.EYE, R.HEAD);
     }
-    fset(11, 13, SLOT.EYE_DARK, R.HEAD);
-    fset(20, 13, SLOT.EYE_DARK, R.HEAD);
-    fset(11, 12, SLOT.EYE_SHINE, R.HEAD);
-    fset(18, 12, SLOT.EYE_SHINE, R.HEAD);
+    fset(12, 12, SLOT.EYE_DARK, R.HEAD);
+    fset(19, 12, SLOT.EYE_DARK, R.HEAD);
+    // Shine on the top OUTER corner of each eye, mirrored properly. The
+    // old pair sat at x11 and x18, which is outer-left on one eye and
+    // inner-left on the other.
+    fset(11, 11, SLOT.EYE_SHINE, R.HEAD);
+    fset(20, 11, SLOT.EYE_SHINE, R.HEAD);
+  }
+
+  /**
+   * Cheek blush.
+   *
+   * Two pixels, and the highest signature-per-pixel move on the whole rig.
+   * It is what makes Kirby and Isabelle legible as thumbnails: a warm
+   * patch under the eye reads as "friendly" before any other feature
+   * resolves. The pink is already in the palette for the nose and inner
+   * ear, and it is tinted toward the coat so it never out-shouts a dark
+   * breed.
+   */
+  if (!shut) {
+    fset(10, 14, SLOT.PINK, R.HEAD);
+    fset(21, 14, SLOT.PINK, R.HEAD);
   }
 
   // Muzzle
