@@ -328,6 +328,65 @@ export function driftGeometry(
   };
 }
 
+/**
+ * Coarsest slice of depth that paint order is allowed to lag behind by.
+ *
+ * Depth drives paint order through a rounded thousandth, so 0.01 is ten
+ * steps of the only resolution that exists downstream — fine enough that the
+ * lag cannot put a cat on the wrong side of anything it is near, and coarse
+ * enough that a whole walk costs a handful of timers.
+ */
+const DEPTH_SLICE = 0.01;
+
+/**
+ * Hard ceiling on slices per walk, so an unexpectedly long leg cannot become
+ * a per-frame update by another name. A zone spans 0.055 of depth, so nothing
+ * the layout produces comes anywhere near this.
+ */
+const MAX_DEPTH_SLICES = 12;
+
+/**
+ * Paint order through a walk, as a schedule for the caller to play.
+ *
+ * Position rides the native driver, but paint order is zIndex — a layout
+ * prop, which cannot be animated at all. Taking one depth for the whole walk
+ * meant taking the nearer end, so a cat walking away from the camera stayed
+ * painted in front of everything it passed for the second half of its
+ * journey: a cat sliding OVER the bin it should have gone behind.
+ *
+ * So the walk is cut into slices and paint order steps through them. planeY
+ * is linear in depth and the translation is linear in time, so depth is
+ * linear in time too and a slice boundary is a lerp — nothing is sampled
+ * from the animation and nothing is read back from the native side.
+ *
+ * Each slice takes the NEARER of its two ends rather than its midpoint,
+ * which keeps the one good property the old compromise had: when paint order
+ * is wrong it is wrong toward the front, and a cat passing in front of
+ * something reads as a cat while one clipped through it reads as a bug. What
+ * changes is that the error is now bounded by a slice rather than by half
+ * the journey.
+ */
+export function depthSlices(
+  from: number,
+  to: number,
+  durationMs: number,
+): ReadonlyArray<{ atMs: number; depth: number }> {
+  const count = Math.max(
+    1,
+    Math.min(MAX_DEPTH_SLICES, Math.ceil(Math.abs(to - from) / DEPTH_SLICE)),
+  );
+  const at = (t: number) => from + (to - from) * t;
+
+  const slices: Array<{ atMs: number; depth: number }> = [];
+  for (let k = 0; k < count; k++) {
+    slices.push({
+      atMs: (durationMs * k) / count,
+      depth: Math.max(at(k / count), at((k + 1) / count)),
+    });
+  }
+  return slices;
+}
+
 // ---------------------------------------------------------------------------
 // Flavour idles
 // ---------------------------------------------------------------------------

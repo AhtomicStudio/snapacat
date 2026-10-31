@@ -254,6 +254,82 @@ describe('layoutScene', () => {
     expect(cats[0]!.zone).toBe(1);
   });
 
+  /**
+   * The wander budget only separates cats that stay in their own zones. A cat
+   * that leaves walks the whole width of the plane at a fixed depth, and the
+   * budget says nothing at all about the middle of that journey — so the
+   * clearance has to be checked along the path instead, before the cat is
+   * given one.
+   *
+   * Checked as a vertical gap rather than by sampling the path, because the
+   * walk passes through every x between the cat and the edge: at some point
+   * its x IS the other cat's x, so nothing but the gap in depth can keep the
+   * pair legible.
+   */
+  it('never sends a cat out across another cat', () => {
+    const scenery = [
+      { id: 'scenery_bin', u: 0.12, depth: 0.2 },
+      { id: 'scenery_crates', u: 0.56, depth: 0.14 },
+      { id: 'scenery_bin', u: 0.86, depth: 0.26 },
+    ];
+    const reach = (depth: number) =>
+      Math.abs(planeY(Math.min(1, depth + ZONE_DEPTH)) - planeY(depth));
+
+    for (const hoodId of HOODS) {
+      for (let catCount = 1; catCount <= 6; catCount++) {
+        const { cats } = layoutScene({
+          hoodId,
+          placedItems: ['item_kibble_bowl', 'item_toy_mouse'],
+          catCount,
+          scenery,
+        });
+        for (const cat of cats) {
+          if (cat.exitSpan === null) continue;
+          const towardLeft = cat.exitSpan < 0;
+          for (const other of cats) {
+            if (other === cat) continue;
+            if (towardLeft ? other.x > cat.x : other.x < cat.x) continue;
+            const gap =
+              Math.abs(cat.y - other.y) -
+              reach(cat.z) * cat.zone -
+              reach(other.z) * other.zone;
+            expect({
+              hoodId,
+              catCount,
+              walker: cat.key,
+              passing: other.key,
+              clear: gap >= 0.035,
+            }).toEqual({
+              hoodId,
+              catCount,
+              walker: cat.key,
+              passing: other.key,
+              clear: true,
+            });
+          }
+        }
+      }
+    }
+  });
+
+  it('leaves by the nearer edge, and walks past it rather than to it', () => {
+    // A cat alone has nobody to get past, so it should take the short way
+    // out — and it has to end up offstage, or it would stop in full view and
+    // dissolve where the player can watch it happen.
+    for (const hoodId of HOODS) {
+      const { cats } = layoutScene({
+        hoodId,
+        placedItems: ['item_kibble_bowl'],
+        catCount: 1,
+      });
+      const cat = cats[0]!;
+      expect(cat.exitSpan).not.toBeNull();
+      expect(cat.exitSpan! < 0).toBe(cat.x < 0.5);
+      const arrivesAt = cat.x + cat.exitSpan!;
+      expect(arrivesAt < 0 || arrivesAt > 1).toBe(true);
+    }
+  });
+
   it('leaves the layout alone when the environment has no scenery', () => {
     const bare = layoutScene({
       hoodId: 'hood_alpha',

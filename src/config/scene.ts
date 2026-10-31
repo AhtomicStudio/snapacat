@@ -270,6 +270,25 @@ export interface CatPlacement extends Placement {
    * crowded cat still wanders in the same shape, just less far.
    */
   zone: number;
+  /**
+   * How far across the world this cat must walk to leave, as a signed
+   * fraction of world width — or null if it has no clear way out.
+   *
+   * Leaving is the one thing a cat does that the zone cannot contain: it
+   * walks the whole width of the plane at a fixed depth, past everyone
+   * between it and the edge, and no amount of clearance at either end
+   * covers the middle of that journey. So the layout checks the path and
+   * picks the side that is clear, preferring the nearer edge because a
+   * short departure is one you can watch from start to finish. Null means
+   * both ways are blocked and the cat stays in.
+   *
+   * Only a cat on bare ground ever leaves — one at an item or a prop turned
+   * up for it and stays. Across the five Hoods the suite lays out, six cats
+   * stand on bare ground at six visitors and two of them have no clear way
+   * out. That is the right way round: a plane crowded enough to block the
+   * aisle is exactly the one where a departure would shoulder past somebody.
+   */
+  exitSpan: number | null;
 }
 
 /** A vacant anchor offered to the player as somewhere to put something. */
@@ -366,6 +385,15 @@ const MIN_ZONE = 0.3;
  */
 const ACTOR_CLEARANCE_X = 0.06;
 const ACTOR_CLEARANCE_Y = 0.035;
+
+/**
+ * How far past the edge of the world a departing cat aims for.
+ *
+ * It never gets there — `useCatLife` fades it out on arrival — but the walk
+ * has to end somewhere offstage, or a cat would stop and dissolve in full
+ * view of the player.
+ */
+const EXIT_MARGIN = 0.06;
 
 export interface LayoutInput {
   /** Seed source — use the Hood id so a Hood always lays out the same way. */
@@ -539,8 +567,9 @@ export function layoutScene({
         slot,
         atItemId: host.itemId,
         atSceneryId: null,
-        // Overwritten by the wander-budget pass below, once every cat is placed.
+        // Both filled in by the wander pass below, once every cat is placed.
         zone: 1,
+        exitSpan: null,
         x: planeX(u, depth),
         y: planeY(depth),
         scale: planeScale(depth),
@@ -571,8 +600,9 @@ export function layoutScene({
         slot,
         atItemId: null,
         atSceneryId: prop.id,
-        // Overwritten by the wander-budget pass below, once every cat is placed.
+        // Both filled in by the wander pass below, once every cat is placed.
         zone: 1,
+        exitSpan: null,
         x,
         y,
         scale: planeScale(depth),
@@ -595,8 +625,9 @@ export function layoutScene({
         slot,
         atItemId: null,
         atSceneryId: null,
-        // Overwritten by the wander-budget pass below, once every cat is placed.
+        // Both filled in by the wander pass below, once every cat is placed.
         zone: 1,
+        exitSpan: null,
         x,
         y,
         scale: planeScale(spare.depth),
@@ -656,6 +687,48 @@ export function layoutScene({
   cats.forEach((cat, i) => {
     const budget = budgets[i]!;
     cat.zone = budget < MIN_ZONE ? 0 : budget;
+  });
+
+  /**
+   * And which way out each cat has, now that the zones are settled.
+   *
+   * Measured the same way as the zones — a cat is in the way if the vertical
+   * gap between the two of them, once both have spent their drift, is inside
+   * the clearance — because the two questions are the same question. The
+   * difference is that a walk out has no near end and no far end to be clear
+   * at: the cat passes through every x between here and the edge, so anything
+   * sharing its band blocks the whole side.
+   *
+   * Only other CATS count. A cat that walks past a bin at a different depth
+   * is occluded by it, which is the plane doing its job; two cats at the same
+   * depth cannot occlude each other usefully, because the thing in front is
+   * the same size and shape as the thing behind and the pair reads as one
+   * animal. Depth solves the first and cannot solve the second.
+   */
+  cats.forEach((cat) => {
+    const reach = driftReach(cat.z);
+    const blocked = (towardLeft: boolean) =>
+      cats.some((other) => {
+        if (other === cat) return false;
+        if (towardLeft ? other.x > cat.x : other.x < cat.x) return false;
+        const gap =
+          Math.abs(cat.y - other.y) -
+          reach.y * cat.zone -
+          driftReach(other.z).y * other.zone;
+        return gap < ACTOR_CLEARANCE_Y;
+      });
+
+    // The nearer edge first, then the far one, then not at all.
+    const nearerIsLeft = cat.x < 0.5;
+    const towardLeft = !blocked(nearerIsLeft)
+      ? nearerIsLeft
+      : !blocked(!nearerIsLeft)
+        ? !nearerIsLeft
+        : null;
+    cat.exitSpan =
+      towardLeft === null
+        ? null
+        : (towardLeft ? -EXIT_MARGIN : 1 + EXIT_MARGIN) - cat.x;
   });
 
   /**

@@ -983,7 +983,6 @@ function SceneCat({
     seed,
     slot: placement.slot,
     baseDepth: placement.z,
-    baseX: placement.x,
     worldWidth,
     sceneHeight,
     asleep,
@@ -992,6 +991,8 @@ function SceneCat({
     atSceneryId: placement.atSceneryId,
     // How far it may stray without walking into the cat next to it.
     zone: placement.zone,
+    // Which way out it has, if the layout found it one.
+    exitSpan: placement.exitSpan,
     enabled: alive,
   });
 

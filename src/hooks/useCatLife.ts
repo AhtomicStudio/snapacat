@@ -29,6 +29,7 @@ import type { ActAnimation, SpriteDirection } from '../assets/sprites';
 import {
   actDuration,
   awayDuration,
+  depthSlices,
   driftGeometry,
   driftTarget,
   walkFacing,
@@ -77,8 +78,12 @@ export interface CatLifeInput {
   atItemId?: string | null;
   /** The piece of scenery it turned up for, for a cat the items had no room for. */
   atSceneryId?: string | null;
-  /** The cat's resting position across the world, 0…1. Used to pick an exit side. */
-  baseX?: number;
+  /**
+   * How far this cat must walk to leave, as a signed fraction of world width
+   * — or null if the layout found it no clear way out, in which case it never
+   * takes the trip at all. See `CatPlacement.exitSpan`.
+   */
+  exitSpan?: number | null;
   /**
    * How much of the standard wander zone this cat may use, 0…1, from the
    * layout. A cat with close neighbours gets less, because the clearance the
@@ -156,7 +161,7 @@ export function useCatLife({
   asleep,
   atItemId,
   atSceneryId,
-  baseX = 0.5,
+  exitSpan = null,
   zone = 1,
   enabled,
 }: CatLifeInput): CatLife {
@@ -228,6 +233,26 @@ export function useCatLife({
       }, ms);
     };
 
+    /**
+     * Plays a paint-order schedule alongside a walk.
+     *
+     * Chains through `after` like everything else here, which is safe
+     * because a walk ends on the animation's own callback and not on a
+     * timer: nothing else is waiting on `timer` while a leg is in flight,
+     * and the cleanup clears whichever slice is pending.
+     */
+    const followDepth = (from: number, to: number, durationMs: number) => {
+      const slices = depthSlices(from, to, durationMs);
+      const play = (k: number) => {
+        const slice = slices[k];
+        if (!slice) return;
+        setDepth(slice.depth);
+        const next = slices[k + 1];
+        if (next) after(next.atMs - slice.atMs, () => play(k + 1));
+      };
+      play(0);
+    };
+
     /** Play one flavour idle, then decide whether to stay or move. */
     const beat = () => {
       /**
@@ -273,14 +298,15 @@ export function useCatLife({
      * bowl you put down, and wandering off would undercut the one piece of
      * cause and effect the Hood has.
      */
-    const startExcursion = () => {
+    const startExcursion = (span: number) => {
       const from = spot.current;
-      // Leave by the nearer edge, so the walk is short enough to watch.
-      const outward = baseX < 0.5 ? -0.06 : 1.06;
       const to: Spot = {
-        dx: (outward - baseX) * worldWidth,
+        // The layout chose the side, having checked that no other cat is
+        // standing in the way. The walk out is level, so the cat's depth —
+        // and with it its paint order — stays the one it set off at.
+        dx: span * worldWidth,
         dy: from.dy,
-        depth: baseDepth,
+        depth: from.depth,
       };
 
       const travelX = to.dx - from.dx;
@@ -290,12 +316,21 @@ export function useCatLife({
       const outMs = Math.min(9000, Math.max(1800, Math.abs(travelX) / 0.1));
 
       legRef.current = { from, to };
+      /**
+       * Rewind BEFORE the leg is published, not when the walk starts.
+       *
+       * The interpolation is built from whatever `progress` holds the moment
+       * the leg lands in state, and the previous walk left it at 1 — so
+       * publishing first drew the cat at its DESTINATION, held it there for
+       * the length of the pivot, then snapped it back to walk the leg
+       * properly. Up to 360ms of one cat in two places, which is exactly
+       * what reads as a cat duplicating as it turns.
+       */
+      progress.setValue(0);
       setLeg({ from, to });
-      setDepth(baseDepth);
 
       turn(heading, () => {
         setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
-        progress.setValue(0);
         Animated.timing(progress, {
           toValue: 1,
           duration: outMs,
@@ -320,16 +355,19 @@ export function useCatLife({
               // Reappear at the edge, then walk home.
               const home: Spot = { ...AT_REST, depth: baseDepth };
               legRef.current = { from: to, to: home };
+              progress.setValue(0);
               setLeg({ from: to, to: home });
               const backX = home.dx - to.dx;
               facing = walkFacing(backX, 0, 'S');
               setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
+              // The way back DOES change depth: home is the cat's own spot,
+              // and it left from wherever it had drifted to.
+              followDepth(to.depth, home.depth, outMs);
               Animated.timing(opacity, {
                 toValue: 1,
                 duration: 260,
                 useNativeDriver: true,
               }).start();
-              progress.setValue(0);
               Animated.timing(progress, {
                 toValue: 1,
                 duration: outMs,
@@ -357,8 +395,12 @@ export function useCatLife({
        * One excursion in eight is a trip off the plane, for cats with no
        * item holding them in place.
        */
-      if (interactions.length === 0 && wandersOff(seed, slot, index)) {
-        startExcursion();
+      if (
+        interactions.length === 0 &&
+        exitSpan !== null &&
+        wandersOff(seed, slot, index)
+      ) {
+        startExcursion(exitSpan);
         return;
       }
       const target = driftTarget(seed, slot, index, zone);
@@ -393,15 +435,15 @@ export function useCatLife({
       legRef.current = { from, to };
       const heading = walkFacing(travelX, travelY, facing);
 
+      // See the note in startExcursion: rewind before publishing the leg.
+      progress.setValue(0);
       setLeg({ from, to });
-      // Take the nearer of the two depths for the whole walk. Paint order
-      // cannot be animated, so it has to be wrong for half the journey either
-      // way; a cat passing IN FRONT of something reads as a cat, while one
-      // clipped through a flower pot reads as a bug.
-      setDepth(Math.max(from.depth, to.depth));
+      // Paint order is left alone until the cat actually sets off: it stands
+      // at `from` for the whole pivot, so what the last leg left behind is
+      // already the right answer.
 
       // Pivot to face the way it is about to go, THEN set off.
-      turn(heading, () => travel(target.durationMs, to));
+      turn(heading, () => travel(target.durationMs, from, to));
     };
 
     /**
@@ -430,10 +472,10 @@ export function useCatLife({
       stepThrough(0);
     };
 
-    const travel = (durationMs: number, to: Spot) => {
+    const travel = (durationMs: number, from: Spot, to: Spot) => {
       setActivity({ kind: 'walking', direction: facing, animation: 'walk' });
+      followDepth(from.depth, to.depth, durationMs);
 
-      progress.setValue(0);
       Animated.timing(progress, {
         toValue: 1,
         duration: durationMs,
@@ -493,6 +535,7 @@ export function useCatLife({
     enabled,
     canWander,
     zone,
+    exitSpan,
     reduceMotion,
     progress,
   ]);

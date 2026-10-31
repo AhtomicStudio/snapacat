@@ -1,5 +1,6 @@
 import {
   actDuration,
+  depthSlices,
   driftGeometry,
   driftTarget,
   facingFor,
@@ -12,7 +13,7 @@ import {
   TURN_STEP_MS,
 } from '../catBehaviour';
 import { ACT_ANIMATIONS, DIRECTIONS, type ActAnimation } from '../../assets/sprites';
-import { planeY } from '../../config/scene';
+import { planeY, ZONE_DEPTH } from '../../config/scene';
 
 /**
  * The behaviour layer's failures are all of the kind you only notice by
@@ -259,6 +260,68 @@ describe('driftGeometry', () => {
   it('moves a cat DOWN the screen as it comes toward the viewer', () => {
     expect(driftGeometry(0.4, 0.05, 800).dy).toBeGreaterThan(0);
     expect(driftGeometry(0.4, -0.05, 800).dy).toBeLessThan(0);
+  });
+});
+
+describe('depthSlices', () => {
+  /**
+   * The schedule exists because paint order is a layout prop and the walk is
+   * on the native driver, so the two cannot be interpolated together. What it
+   * has to guarantee is not exactness — it cannot be exact, it is a staircase
+   * under a ramp — but that the staircase never falls BEHIND the ramp, and
+   * never gets more than one step ahead.
+   */
+  const trueDepth = (from: number, to: number, t: number) => from + (to - from) * t;
+
+  const activeAt = (
+    slices: ReadonlyArray<{ atMs: number; depth: number }>,
+    ms: number,
+  ) => {
+    let current = slices[0]!;
+    for (const slice of slices) if (slice.atMs <= ms) current = slice;
+    return current;
+  };
+
+  it.each([
+    ['toward the viewer', 0.3, 0.3 + ZONE_DEPTH],
+    ['away from the viewer', 0.6, 0.6 - ZONE_DEPTH],
+    ['the length of a whole zone', 0.2, 0.2 + ZONE_DEPTH * 2],
+  ])('never paints a cat walking %s further back than it is', (_label, from, to) => {
+    const durationMs = 2400;
+    const slices = depthSlices(from, to, durationMs);
+
+    for (let ms = 0; ms <= durationMs; ms += 10) {
+      const actual = activeAt(slices, ms).depth;
+      const real = trueDepth(from, to, ms / durationMs);
+      // Never behind the cat: when paint order is wrong it is wrong toward
+      // the front, so the cat passes IN FRONT of what it should be behind.
+      // One reads as a cat, the other reads as a bug.
+      expect(actual).toBeGreaterThanOrEqual(real - 1e-9);
+      // And never more than one step ahead.
+      expect(actual - real).toBeLessThanOrEqual(0.0101);
+    }
+  });
+
+  it('costs a handful of updates for a real walk, not a frame loop', () => {
+    // The whole point of the hook's timeout chain is that nothing runs per
+    // frame. A 2.4s walk at 60fps would be 144 callbacks.
+    expect(depthSlices(0.3, 0.3 + ZONE_DEPTH, 2400).length).toBeLessThanOrEqual(6);
+    expect(depthSlices(0, 1, 2400).length).toBeLessThanOrEqual(12);
+  });
+
+  it('schedules nothing to change for a walk that holds its depth', () => {
+    // A cat leaving the plane walks level. There is nothing to step through,
+    // and a schedule of one is how that gets said.
+    expect(depthSlices(0.4, 0.4, 2400)).toEqual([{ atMs: 0, depth: 0.4 }]);
+  });
+
+  it('starts at the beginning and stays inside the walk', () => {
+    const slices = depthSlices(0.2, 0.8, 1000);
+    expect(slices[0]!.atMs).toBe(0);
+    expect(slices[slices.length - 1]!.atMs).toBeLessThan(1000);
+    for (let i = 1; i < slices.length; i++) {
+      expect(slices[i]!.atMs).toBeGreaterThan(slices[i - 1]!.atMs);
+    }
   });
 });
 
