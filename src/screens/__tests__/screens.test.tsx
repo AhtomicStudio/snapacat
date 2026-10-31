@@ -27,6 +27,10 @@ jest.mock('react-native', () => {
     multiply: () => 0,
     View: (props: any) => React.createElement('View', props, props.children),
     Text: (props: any) => React.createElement('Text', props, props.children),
+    // Touchable wraps Pressable so a press can drive a native-driven spring.
+    // The mock just hands the component straight back — the animation is not
+    // what these tests are about, but its absence stopped the suite loading.
+    createAnimatedComponent: (C: any) => C,
   };
   const UIManager = { setLayoutAnimationEnabledExperimental: jest.fn() };
   const LayoutAnimation = { configureNext: jest.fn(), Presets: { easeInEaseOut: {} } };
@@ -95,7 +99,6 @@ jest.mock('@react-native-firebase/storage', () => ({
 import React from 'react';
 import { CatalogScreen } from '../CatalogScreen';
 import { FieldNotesScreen } from '../FieldNotesScreen';
-import { HoodScreen } from '../HoodScreen';
 import { FriendHoodScreen } from '../FriendHoodScreen';
 
 jest.mock('@react-native-firebase/firestore', () => {
@@ -187,34 +190,12 @@ describe('Screens Render Tests', () => {
     });
   });
 
-  describe('HoodScreen', () => {
-    it('renders HoodScreen without crashing', () => {
-      const onUpdateHood = jest.fn();
-      const onBack = jest.fn();
-      const onUpdateProgression = jest.fn();
-
-      const element = HoodScreen({
-        hoodId: 'hood_test',
-        hood: {
-          name: 'Test Backyard',
-          custom_bg_url: null,
-          placed_items: ['item_toy_mouse'],
-        },
-        onUpdateHood,
-        onBack,
-        progression: {
-          paw_points: 0,
-          unlocked_themes: ['theme_default'],
-          unlocked_items: ['item_kibble_bowl', 'item_toy_mouse', 'item_cardboard_box', 'item_catnip_plant'],
-          active_theme_id: null,
-        },
-        onUpdateProgression,
-        userId: 'user_test',
-      });
-
-      expect(element).toBeDefined();
-    });
-  });
+  // HoodScreen was replaced by HoodHomeScreen, which is not callable as a plain
+  // function the way this suite calls the others: it reads safe-area insets and
+  // window dimensions from context. Its behaviour is covered instead by
+  // config/__tests__/scene.test.ts, which tests the layout maths directly —
+  // more useful than a smoke test that only asserts a component returned
+  // something.
 
   describe('FriendHoodScreen', () => {
     it('renders FriendHoodScreen without crashing', () => {

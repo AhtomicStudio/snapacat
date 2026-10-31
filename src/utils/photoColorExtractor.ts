@@ -1,5 +1,6 @@
 import ImageColors from 'react-native-image-colors';
 import type { HexColor } from './colorExtractor';
+import { logError } from './errorCodes';
 
 // Palettes returned for mock:// URIs — rotated to exercise different sprite matches.
 // Each palette is a near-copy of the matching sprite's canonical palette from spriteLibrary.ts.
@@ -49,8 +50,12 @@ export async function extractPaletteFromPhoto(photoUri: string): Promise<HexColo
 
     // iOS / unknown platform fallback
     return ['#8A8A8A' as HexColor];
-  } catch (err) {
-    console.warn('[photoColorExtractor] ImageColors.getColors failed:', err);
+  } catch {
+    // Deliberately does not log the caught error. In this build the throw comes
+    // from the expo-modules-core shim and carries a file path; in a real build
+    // it could carry a photo URI. The code identifies the path unambiguously
+    // without putting either in a log that ships to release.
+    logError('SNAP-CAM-02');
     return ['#8A8A8A' as HexColor];
   }
 }

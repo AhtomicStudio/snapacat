@@ -3,10 +3,12 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  StyleSheet,
   ActivityIndicator,
 } from 'react-native';
 import { addFriend } from '../services/dbService';
+import { Touchable } from './Touchable';
+import { font, color, space, radius, shadow, fontSize, TAP_MIN } from '../theme';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -57,63 +59,99 @@ export function AddFriend({ currentUid, onFriendAdded }: AddFriendProps) {
   }
 
   return (
-    <View className="bg-card-bg rounded-2xl border border-border p-md shadow-card gap-md">
-      {/* Card heading */}
-      <View>
-        <Text className="text-base font-bold text-text-primary font-display">
-          Add a Friend
-        </Text>
-        <Text className="text-xs text-text-secondary font-sans mt-xs">
-          Enter their UID to connect and view their Hoods
-        </Text>
-      </View>
-
-      {/* Input group */}
-      <View className="gap-xs">
-        <Text className="text-sm font-semibold text-text-primary font-sans">
-          Friend's UID
-        </Text>
+    <View style={styles.card}>
+      {/*
+        The card carried its own "Add a Friend" heading AND the screen printed
+        one above it, so the phrase appeared twice in a row. The screen owns the
+        section title; this card just does the work.
+      */}
+      <View style={styles.field}>
+        <Text style={styles.label}>Friend's UID</Text>
         <TextInput
           value={inputValue}
           onChangeText={handleChangeText}
           onSubmitEditing={handleSubmit}
           placeholder="e.g. abc123xyz"
-          placeholderTextColor="#706B67"
+          placeholderTextColor={color.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="done"
-          className="bg-background border border-border rounded-lg px-md py-sm text-sm text-text-primary font-sans"
-          style={{ borderColor: submitState === 'error' ? '#F79E89' : undefined }}
+          accessibilityLabel="Friend's UID"
+          style={[
+            styles.input,
+            submitState === 'error' ? { borderColor: color.error } : null,
+          ]}
         />
 
-        {/* Inline feedback */}
-        {submitState === 'error' && (
-          <Text className="text-xs text-error font-sans">{errorMessage}</Text>
-        )}
+        {submitState === 'error' && <Text style={styles.error}>{errorMessage}</Text>}
         {submitState === 'success' && (
-          <Text className="text-xs text-success font-sans">
-            Friend added successfully! 🐾
-          </Text>
+          <Text style={styles.success}>Friend added successfully! 🐾</Text>
         )}
       </View>
 
-      {/* Submit button */}
-      <TouchableOpacity
+      <Touchable
         onPress={handleSubmit}
         disabled={!canSubmit}
-        activeOpacity={0.75}
-        className={`rounded-xl py-sm px-md items-center justify-center flex-row gap-sm ${
-          canSubmit ? 'bg-ginger shadow-button' : 'bg-ginger-light opacity-60'
-        }`}
+        accessibilityRole="button"
+        accessibilityLabel="Add friend"
+        style={[styles.submit, canSubmit ? styles.submitEnabled : styles.submitDisabled]}
       >
         {submitState === 'loading' ? (
-          <ActivityIndicator size="small" color="#FFFFFF" />
+          <ActivityIndicator size="small" color={color.milk} />
         ) : (
-          <Text className="text-milk font-bold text-sm font-display">
+          <Text style={[styles.submitText, !canSubmit && styles.submitTextDisabled]}>
             Add Friend
           </Text>
         )}
-      </TouchableOpacity>
+      </Touchable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: color.surface,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: color.border,
+    padding: space.md,
+    gap: space.md,
+    ...shadow.card,
+  },
+  field: { gap: space.xs },
+  label: {
+    fontSize: fontSize.sm,
+    fontFamily: font.medium,
+    color: color.textPrimary,
+  },
+  input: {
+    backgroundColor: color.background,
+    borderWidth: 1,
+    borderColor: color.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    fontSize: fontSize.sm,
+    color: color.textPrimary,
+    // Without this the field collapses to the text's own height and reads as
+    // a bare line of placeholder copy rather than an input.
+    minHeight: TAP_MIN,
+  },
+  error: { fontSize: fontSize.xs, color: color.error },
+  success: { fontSize: fontSize.xs, color: '#16A34A' },
+
+  submit: {
+    borderRadius: radius.sm + 4,
+    paddingVertical: space.sm + 2,
+    paddingHorizontal: space.md,
+    minHeight: TAP_MIN,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  submitEnabled: { backgroundColor: color.ginger, ...shadow.button },
+  submitDisabled: { backgroundColor: color.gingerLight },
+  submitText: { color: color.milk, fontFamily: font.bold, fontSize: fontSize.sm },
+  submitTextDisabled: { color: color.gingerDark },
+});

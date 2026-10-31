@@ -1,0 +1,594 @@
+/**
+ * What a cat decides to do, and where it decides to go.
+ *
+ * Pure and deterministic so it can be reasoned about and tested without a
+ * renderer — same split as scene.ts, and for the same reason: the interesting
+ * failures here are "all six cats groomed at once" and "a cat walked off the
+ * plane", both of which are arithmetic rather than rendering.
+ *
+ * ZONE DRIFT, NOT PATHFINDING
+ *
+ * Each cat wanders inside a small ellipse around the anchor it arrived at. It
+ * does not path across the Hood, re-home to another anchor, or negotiate with
+ * other cats for space. That is a deliberate ceiling, not a stepping stone:
+ *
+ *   - a cat that stays near the item it came for keeps the core loop legible.
+ *     You put down a bowl, a cat turns up at the bowl and stays about the bowl.
+ *   - anchors are owned by items, so letting cats reassign them would mean
+ *     cats and items competing for the same lattice
+ *   - six cats wandering a shared plane with no collision handling walk through
+ *     each other, and at this sprite size overlap reads as a rendering bug
+ *
+ * The zone is wider than it is deep. Lateral movement puts the cat in profile,
+ * which is where the walk cycle reads best and where the eight-way art is
+ * strongest; a cat drifting mostly toward and away from the camera would spend
+ * its time in the two facings with the least to show.
+ */
+import { ACT_ANIMATIONS, DIRECTIONS, type ActAnimation, type SpriteDirection } from '../assets/sprites';
+import { ZONE_DEPTH, ZONE_U, planeY } from '../config/scene';
+import { PLACEABLE_ITEMS } from './spawnCalculator';
+import type { ItemCategory } from '../types';
+
+// ---------------------------------------------------------------------------
+// Facing
+// ---------------------------------------------------------------------------
+
+/**
+ * Unit vector each facing travels along, in SCREEN space.
+ *
+ * Positive y is down the screen, which on the ground plane is toward the
+ * viewer — so "south" is forward out of the scene. This mirrors VECTOR in
+ * scripts/sprites/directions.js; the two have to agree or a cat will walk east
+ * while facing west.
+ */
+const FACING_VECTOR: Record<SpriteDirection, readonly [number, number]> = {
+  S: [0, 1],
+  SE: [0.7071, 0.7071],
+  E: [1, 0],
+  NE: [0.7071, -0.7071],
+  N: [0, -1],
+  NW: [-0.7071, -0.7071],
+  W: [-1, 0],
+  SW: [-0.7071, 0.7071],
+};
+
+/**
+ * The facings a cat passes through turning from one direction to another.
+ *
+ * Returns the steps AFTER `from`, ending at `to`, taking whichever way round is
+ * shorter. Turning from S to E yields ['SE', 'E'].
+ *
+ * WHY A CAT CANNOT JUST FACE THE OTHER WAY
+ *
+ * Popping straight from one facing to another is, in the pipeline doc's words,
+ * the clearest "this is a prototype" tell there is — and the two-sheet design
+ * makes it worse, because a cat leaving its resting spot changes sheet and
+ * facing in the same frame. A 90-degree snap at the exact moment the texture
+ * swaps reads as a glitch rather than as a cat.
+ *
+ * The fix needs no new art at all. Eight facings already exist on the
+ * directional sheet; a turn is just those facings played in order. That is the
+ * whole transition — three frames of existing art and a timer.
+ */
+/**
+ * Which way round a cat pivots when it is turning all the way about.
+ *
+ * Through the FRONT. Either route is four steps, so the cost is the same and
+ * the only difference is what the player watches: a cat turning through S
+ * sweeps its face across the camera, and a cat turning through N shows its
+ * back for three frames and reads as sulking. The back facings are also the
+ * weakest art on the sheet — no tail in the silhouette, and a walk cycle that
+ * can only sway — so the less time spent in them the better.
+ *
+ * S to N is the one pair with no front to prefer: both midpoints are a
+ * profile. That is where the tie-break still earns its keep, and it has to,
+ * or six cats about-facing at once all pivot the same way.
+ */
+function aboutFaceClockwise(start: number, tieBreak: number): boolean {
+  const northness = (index: number) => -FACING_VECTOR[DIRECTIONS[index % 8]!][1];
+  const clockwiseMid = northness(start + 2);
+  const anticlockwiseMid = northness(start + 6);
+  if (clockwiseMid !== anticlockwiseMid) return clockwiseMid < anticlockwiseMid;
+  return (tieBreak & 1) === 0;
+}
+
+export function turnPath(
+  from: SpriteDirection,
+  to: SpriteDirection,
+  /**
+   * Breaks the tie on an exact about-face. Without it every 180-degree turn
+   * resolves the same way, and six cats deciding to leave at once all pivot
+   * clockwise together — which reads as choreography.
+   */
+  tieBreak = 0,
+): SpriteDirection[] {
+  const start = DIRECTIONS.indexOf(from);
+  const end = DIRECTIONS.indexOf(to);
+  if (start < 0 || end < 0 || start === end) return [];
+
+  // DIRECTIONS is in clockwise order, so the difference mod 8 is the number of
+  // 45-degree steps one way and 8 minus that is the other.
+  const forward = (end - start + 8) % 8;
+  const clockwise = forward === 4 ? aboutFaceClockwise(start, tieBreak) : forward < 4;
+  const step = clockwise ? 1 : -1;
+  const count = forward === 4 ? 4 : clockwise ? forward : 8 - forward;
+
+  const path: SpriteDirection[] = [];
+  for (let i = 1; i <= count; i++) {
+    path.push(DIRECTIONS[(start + step * i + 8) % 8]!);
+  }
+  return path;
+}
+
+/** How long each 45-degree step of a turn is held, in ms. */
+export const TURN_STEP_MS = 90;
+
+/**
+ * Nearest of the eight facings to a direction of travel.
+ *
+ * A zero-length vector keeps whatever the cat was already facing — snapping to
+ * south on arrival would make every cat pivot to the camera the instant it
+ * stopped, which reads as a flinch.
+ */
+export function facingFor(dx: number, dy: number, fallback: SpriteDirection = 'S'): SpriteDirection {
+  const length = Math.hypot(dx, dy);
+  if (length < 1e-6) return fallback;
+
+  let best = fallback;
+  let bestDot = -Infinity;
+  for (const dir of DIRECTIONS) {
+    const [vx, vy] = FACING_VECTOR[dir];
+    const dot = (dx / length) * vx + (dy / length) * vy;
+    if (dot > bestDot) {
+      bestDot = dot;
+      best = dir;
+    }
+  }
+  return best;
+}
+
+/**
+ * The facings a cat is allowed to TRAVEL in: toward the camera, or across.
+ *
+ * A cat walking away from the camera does not read as a cat walking away. The
+ * walk cycle is one frame table shared by all eight facings, and what it
+ * encodes is a stride along the screen x axis — which is a stride in profile,
+ * a foreshortened stride at three-quarters, and in the two facings down the
+ * body axis a sideways sway with no fore-and-aft travel in it at all. Facing
+ * the camera the sway passes for a cat walking at you. Facing away, with the
+ * body sliding up the screen, the feet say one thing and the body says
+ * another, and the cat appears to moonwalk.
+ *
+ * So nothing travels north. A heading that would has its away component
+ * dropped and keeps its lateral one, which is the nearest facing that is
+ * still true about where the cat is going: a cat drifting a few points
+ * further up the plane walks there sideways, as cats mostly do anyway.
+ *
+ * This is a guard, not the whole fix — `driftTarget` keeps excursions
+ * lateral enough that the fold is rarely more than a rounding. It exists
+ * because the fold has to hold on any screen shape, and the zone ellipse
+ * only projects to a lateral one on the shapes we measured.
+ */
+const FORWARD_FOLD: Record<SpriteDirection, SpriteDirection | null> = {
+  S: 'S',
+  SE: 'SE',
+  E: 'E',
+  SW: 'SW',
+  W: 'W',
+  NE: 'E',
+  NW: 'W',
+  // Straight away from the camera has no lateral component to keep.
+  N: null,
+};
+
+/** Nearest facing to a direction of travel that a cat is willing to walk in. */
+export function walkFacing(
+  dx: number,
+  dy: number,
+  fallback: SpriteDirection = 'S',
+): SpriteDirection {
+  const folded = FORWARD_FOLD[facingFor(dx, dy, fallback)];
+  if (folded) return folded;
+  if (dx !== 0) return dx > 0 ? 'E' : 'W';
+  // Dead north with no lateral travel at all: carry on the way the cat was
+  // already pointing rather than inventing a side.
+  return FACING_VECTOR[fallback][0] < 0 ? 'W' : 'E';
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic noise
+// ---------------------------------------------------------------------------
+
+/**
+ * xorshift in [0,1). Repeated here rather than imported from scene.ts because
+ * that module keeps its generator private, and a behaviour layer reaching into
+ * a layout module's internals is the kind of coupling that makes both harder to
+ * change later.
+ */
+function noise(seed: number, salt: number): number {
+  let x = (seed ^ Math.imul(salt + 0x9e3779b9, 2654435761)) >>> 0;
+  x ^= x << 13; x >>>= 0;
+  x ^= x >>> 17;
+  x ^= x << 5; x >>>= 0;
+  return x / 4294967296;
+}
+
+// ---------------------------------------------------------------------------
+// The zone
+// ---------------------------------------------------------------------------
+
+
+/**
+ * How far off horizontal an excursion may be aimed.
+ *
+ * The zone is already much wider than it is deep, but a POINT in it is not a
+ * HEADING to it: drawn uniformly over the ellipse, roughly one target in
+ * three sits near enough to straight up or straight down that the walk is
+ * mostly vertical, and the ones pointing up are the moonwalk. Aiming inside a
+ * wedge either side of horizontal puts every excursion in profile or close
+ * to it, which is both where the walk cycle reads best and where the eight-way
+ * art is strongest.
+ *
+ * Fifty degrees in zone space, which is far less in screen space: the zone is
+ * 0.084 of the world wide and 0.016 of the scene deep once the plane
+ * projection is applied, so a heading at the edge of the wedge arrives at
+ * atan(0.19 * (height / width) * tan 50) — about 16 degrees on a phone-shaped
+ * scene, inside the 22.5-degree bucket that snaps a heading to due east or
+ * west. The margin runs out somewhere past a scene 1.6 times as tall as the
+ * viewport is wide, which is why walkFacing guards rather than trusts this.
+ */
+const LATERAL_WEDGE = (50 * Math.PI) / 180;
+
+/** How long a cat rests between excursions, in ms. */
+const SETTLE_MIN = 5200;
+const SETTLE_SPREAD = 11000;
+
+/**
+ * Walk speed in world-fractions per second. Tuned against the walk cycle rather
+ * than chosen: the cycle is 640ms for four frames with a stride of about two
+ * source pixels a frame, so a cat that covers much more ground than this is
+ * skating and one that covers much less is moonwalking on the spot.
+ */
+const WALK_SPEED = 0.028;
+
+export interface DriftTarget {
+  /** Offset from the cat's base position, as a fraction of the world width. */
+  du: number;
+  /** Offset from the cat's base depth. */
+  dDepth: number;
+  /** How long the walk should take, in ms. */
+  durationMs: number;
+}
+
+/**
+ * Picks the n-th excursion for a cat.
+ *
+ * Seeded by the cat's slot and the excursion index, so the whole sequence is
+ * reproducible — a Hood revisited behaves the same way, and a failure can be
+ * replayed. The target is drawn in polar form so the distribution fills the
+ * ellipse instead of clustering in its corners.
+ *
+ * `zone` is the fraction of the standard zone this cat may use, which the
+ * layout works out from how close its neighbours are — see `CatPlacement.zone`.
+ * It scales the ellipse rather than clipping it, so a hemmed-in cat still
+ * wanders in the same shape and with the same distribution, just less far.
+ * The seeded angle is untouched, so shrinking a zone never reshuffles a cat's
+ * schedule or sends it somewhere different.
+ */
+export function driftTarget(
+  seed: number,
+  slot: number,
+  index: number,
+  zone = 1,
+): DriftTarget {
+  const salt = slot * 977 + index * 31;
+  // Left or right first, then how far off horizontal — rather than an angle
+  // anywhere on the circle. See LATERAL_WEDGE.
+  const side = noise(seed, salt + 2) < 0.5 ? 0 : Math.PI;
+  const angle = side + (noise(seed, salt) * 2 - 1) * LATERAL_WEDGE;
+  // sqrt keeps the points uniform over the area; without it they bunch at the
+  // centre and the cat appears to twitch rather than walk.
+  const radius = Math.sqrt(noise(seed, salt + 1));
+
+  const scale = Math.max(0, Math.min(1, zone));
+  const du = Math.cos(angle) * radius * ZONE_U * scale;
+  const dDepth = Math.sin(angle) * radius * ZONE_DEPTH * scale;
+
+  const distance = Math.hypot(du, dDepth);
+  return {
+    du,
+    dDepth,
+    // Floor the duration so a short hop still plays enough of the cycle to read
+    // as walking rather than as a nudge.
+    durationMs: Math.max(900, Math.round((distance / WALK_SPEED) * 1000)),
+  };
+}
+
+/** How long a cat sits still before its n-th excursion, in ms. */
+export function settleDuration(seed: number, slot: number, index: number): number {
+  return SETTLE_MIN + Math.round(noise(seed, slot * 613 + index * 17) * SETTLE_SPREAD);
+}
+
+/**
+ * Screen geometry for a cat that has drifted `dDepth` from its base.
+ *
+ * Returns the vertical offset in points and the clamped depth, so the caller
+ * never has to know how the plane projects. Scale is not returned: see the note
+ * in useCatLife on why a wander zone's 2.6% size change is not worth animating.
+ */
+export function driftGeometry(
+  baseDepth: number,
+  dDepth: number,
+  sceneHeight: number,
+): { dy: number; depth: number } {
+  const depth = Math.min(1, Math.max(0, baseDepth + dDepth));
+  return {
+    dy: (planeY(depth) - planeY(baseDepth)) * sceneHeight,
+    depth,
+  };
+}
+
+/**
+ * Coarsest slice of depth that paint order is allowed to lag behind by.
+ *
+ * Depth drives paint order through a rounded thousandth, so 0.01 is ten
+ * steps of the only resolution that exists downstream — fine enough that the
+ * lag cannot put a cat on the wrong side of anything it is near, and coarse
+ * enough that a whole walk costs a handful of timers.
+ */
+const DEPTH_SLICE = 0.01;
+
+/**
+ * Hard ceiling on slices per walk, so an unexpectedly long leg cannot become
+ * a per-frame update by another name. A zone spans 0.055 of depth, so nothing
+ * the layout produces comes anywhere near this.
+ */
+const MAX_DEPTH_SLICES = 12;
+
+/**
+ * Paint order through a walk, as a schedule for the caller to play.
+ *
+ * Position rides the native driver, but paint order is zIndex — a layout
+ * prop, which cannot be animated at all. Taking one depth for the whole walk
+ * meant taking the nearer end, so a cat walking away from the camera stayed
+ * painted in front of everything it passed for the second half of its
+ * journey: a cat sliding OVER the bin it should have gone behind.
+ *
+ * So the walk is cut into slices and paint order steps through them. planeY
+ * is linear in depth and the translation is linear in time, so depth is
+ * linear in time too and a slice boundary is a lerp — nothing is sampled
+ * from the animation and nothing is read back from the native side.
+ *
+ * Each slice takes the NEARER of its two ends rather than its midpoint,
+ * which keeps the one good property the old compromise had: when paint order
+ * is wrong it is wrong toward the front, and a cat passing in front of
+ * something reads as a cat while one clipped through it reads as a bug. What
+ * changes is that the error is now bounded by a slice rather than by half
+ * the journey.
+ */
+export function depthSlices(
+  from: number,
+  to: number,
+  durationMs: number,
+): ReadonlyArray<{ atMs: number; depth: number }> {
+  const count = Math.max(
+    1,
+    Math.min(MAX_DEPTH_SLICES, Math.ceil(Math.abs(to - from) / DEPTH_SLICE)),
+  );
+  const at = (t: number) => from + (to - from) * t;
+
+  const slices: Array<{ atMs: number; depth: number }> = [];
+  for (let k = 0; k < count; k++) {
+    slices.push({
+      atMs: (durationMs * k) / count,
+      depth: Math.max(at(k / count), at((k + 1) / count)),
+    });
+  }
+  return slices;
+}
+
+// ---------------------------------------------------------------------------
+// Flavour idles
+// ---------------------------------------------------------------------------
+
+/** Total cycle length of an action animation, in ms. */
+export function actDuration(animation: ActAnimation): number {
+  return ACT_ANIMATIONS[animation].durations.reduce((a, b) => a + b, 0);
+}
+
+/**
+ * The repertoire a settled cat draws from, and how often each comes up.
+ *
+ * Weighted rather than uniform because these are not equally welcome. A blink
+ * is nearly subliminal and can happen constantly; a yawn is a performance and
+ * palls if it comes round every fifteen seconds. Plain idle keeps the largest
+ * share so the scene has a resting state to return to — constant activity is as
+ * flat as no activity, just louder.
+ *
+ * The weights also account for how much each one actually MOVES, which is not
+ * a matter of taste and was measured: groom changes 45% of the sprite's pixels
+ * at its peak, look 38%, yawn 28% — and tailflick 3.9%, because the S tail is
+ * hemmed in by the frame edge on one side and the skull on the other and
+ * physically cannot swing further (the reasoning is in buildTail_S). An
+ * earlier split gave tailflick and blink 40% of the weight between them, which
+ * meant a cat spent most of its visible life on the two animations nobody can
+ * see. Time on screen is now roughly proportional to what there is to look at.
+ */
+const REPERTOIRE: ReadonlyArray<{ animation: ActAnimation; weight: number }> = [
+  { animation: 'idle', weight: 24 },
+  { animation: 'blink', weight: 20 },
+  { animation: 'look', weight: 18 },
+  { animation: 'groom', weight: 17 },
+  { animation: 'yawn', weight: 13 },
+  { animation: 'tailflick', weight: 8 },
+  /**
+   * A daytime nap. Low weight and long hold, which is the opposite of
+   * every other entry here and deliberate: picked rarely, it still ends up
+   * being a decent share of what you SEE, because one nap runs for several
+   * cycles where a blink runs for one. A Hood where nobody ever settles
+   * for more than two seconds is a Hood of fidgeting.
+   */
+  { animation: 'sleep', weight: 5 },
+];
+
+const TOTAL_WEIGHT = REPERTOIRE.reduce((sum, entry) => sum + entry.weight, 0);
+
+/**
+ * Picks what a settled cat does next.
+ *
+ * `previous` is excluded so the same flourish never runs twice in a row — at
+ * six cats on screen a repeat reads as a stuck animation rather than as a cat
+ * that happened to blink twice. Plain idle is exempt, because two quiet beats
+ * in a row is just a calm cat.
+ */
+export function nextIdle(
+  seed: number,
+  slot: number,
+  index: number,
+  previous?: ActAnimation,
+  interactions: readonly ActAnimation[] = [],
+): ActAnimation {
+  /**
+   * A cat at an item plays that item's repertoire most of the time, and
+   * the general one the rest. Drawn from its own noise salt so adding this
+   * did not reshuffle every existing cat's schedule.
+   */
+  if (interactions.length > 0 && noise(seed, slot * 977 + index * 31) < INTERACTION_SHARE) {
+    const at = Math.floor(noise(seed, slot * 613 + index * 47) * interactions.length);
+    const pick = interactions[Math.min(at, interactions.length - 1)]!;
+    if (pick !== previous) return pick;
+  }
+
+  const roll = noise(seed, slot * 2089 + index * 59) * TOTAL_WEIGHT;
+
+  let cursor = 0;
+  for (const entry of REPERTOIRE) {
+    cursor += entry.weight;
+    if (roll < cursor) {
+      if (entry.animation === previous && previous !== 'idle') return 'idle';
+      return entry.animation;
+    }
+  }
+  return 'idle';
+}
+
+// ---------------------------------------------------------------------------
+// Object interactions
+// ---------------------------------------------------------------------------
+
+/**
+ * What a cat does at each kind of thing you can put down.
+ *
+ * Before this, a cat that had come for a food bowl and a cat standing on
+ * bare asphalt did exactly the same things, which quietly undercut the
+ * whole loop: the reward for placing an item was that a cat stood near it.
+ * Now the item changes the performance.
+ *
+ * Three each, and they are not all new art — `groom`, `look` and
+ * `tailflick` already existed and are perfectly good reactions when they
+ * are chosen BECAUSE of what the cat is next to. A cat grooming after a
+ * meal is a cat that just ate.
+ */
+export const INTERACTIONS: Record<ItemCategory, readonly ActAnimation[]> = {
+  food: ['eat', 'sniff', 'groom'],
+  toy: ['paw', 'sniff', 'look'],
+  shelter: ['sleep', 'groom', 'sniff'],
+  decor: ['look', 'sniff', 'tailflick'],
+};
+
+/**
+ * What a cat does at a piece of the street.
+ *
+ * Items get their repertoire from their category, which works because a
+ * category is a promise about what the thing is for. Scenery has no
+ * categories and should not grow any — a bin, a hedge and a warm vent are
+ * not three instances of one idea, they are three jokes — so each prop says
+ * for itself what a cat does with it.
+ *
+ * The choices are the whole point of seating a cat here. A cat asleep on the
+ * warm air off a vent, a cat batting at a bin lid, a cat watching a birdbath
+ * it is not allowed to touch: each one is a sentence about the prop that the
+ * prop could not say by itself, and none of it is new art.
+ */
+const SCENERY_INTERACTIONS: Record<string, readonly ActAnimation[]> = {
+  scenery_bin: ['sniff', 'paw', 'look'],
+  scenery_crates: ['sleep', 'groom', 'look'],
+  // The warmest spot on the roof, which is why the cats found it first.
+  scenery_vent: ['sleep', 'yawn', 'groom'],
+  scenery_water_tank: ['look', 'sniff', 'tailflick'],
+  scenery_bush: ['sniff', 'paw', 'sleep'],
+  // Watching, not drinking. The regulars have feathers.
+  scenery_birdbath: ['look', 'tailflick', 'paw'],
+  scenery_laundry_pile: ['sleep', 'groom', 'yawn'],
+  scenery_soap_bottle: ['sniff', 'look', 'tailflick'],
+  scenery_lantern_pole: ['groom', 'look', 'tailflick'],
+  scenery_fruit_crate: ['sniff', 'eat', 'paw'],
+};
+
+/** The interaction set for whatever a cat is standing at, if anything. */
+export function interactionsFor(
+  itemId: string | null | undefined,
+  sceneryId?: string | null,
+): readonly ActAnimation[] {
+  if (!itemId) return sceneryId ? SCENERY_INTERACTIONS[sceneryId] ?? [] : [];
+  const def = PLACEABLE_ITEMS.find((i) => i.item_id === itemId);
+  return def ? INTERACTIONS[def.category] : [];
+}
+
+/**
+ * How much of a cat's time at an item is spent on that item.
+ *
+ * Not 1. A cat that only ever ate would be a vending machine, and the
+ * general repertoire is what keeps it a cat; this is the share where the
+ * item wins.
+ */
+const INTERACTION_SHARE = 0.55;
+
+/**
+ * How many cycles a nap runs for.
+ *
+ * The sleep loop is about two and a half seconds, so three to seven cycles
+ * is roughly eight to eighteen seconds of a cat being asleep. Long enough
+ * to read as a nap rather than a long blink, short enough that a player
+ * watching one cat does not conclude it is broken.
+ */
+/**
+ * Whether this excursion is a trip off the plane rather than a short drift.
+ *
+ * One in eight. Higher and the Hood empties out while you are looking at it,
+ * which reads as cats fleeing rather than as a neighbourhood.
+ */
+export function wandersOff(seed: number, slot: number, index: number): boolean {
+  return noise(seed, slot * 1811 + index * 97) < 0.125;
+}
+
+/** How long a cat stays away, in ms. Long enough to be missed. */
+export function awayDuration(seed: number, slot: number, index: number): number {
+  return 4000 + Math.floor(noise(seed, slot * 2273 + index * 101) * 8000);
+}
+
+export function napCycles(seed: number, slot: number, index: number): number {
+  return 3 + Math.floor(noise(seed, slot * 1511 + index * 83) * 5);
+}
+
+/**
+ * Milliseconds to wait before the first animation of a cat's life.
+ *
+ * Six cats mounting in the same commit otherwise start every loop on the same
+ * frame, which is the bug the sprite renderer already staggers breathing to
+ * avoid — this is the same problem one level up.
+ *
+ * The modulus has to exceed `slot * multiplier` for every slot, or the
+ * sequence wraps and two cats land on top of each other. At `% 1700` it did:
+ * the offsets came out 0, 431, 862, 1293, 24, 455, putting slots 0 and 4
+ * **24ms apart** — under two display frames. That was survivable while the
+ * sprite renderer applied its own stagger on top, and stopped being so the
+ * moment scene sprites switched to `stagger={false}`, which made this the only
+ * thing keeping two cats out of phase.
+ *
+ * 463 × 5 = 2315 < 2777, so nothing wraps and the minimum gap is 463ms —
+ * longer than any single frame hold in the set.
+ */
+export function startupStagger(slot: number): number {
+  return (slot * 463) % 2777;
+}

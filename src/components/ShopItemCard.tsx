@@ -3,7 +3,9 @@
  * Shows emoji, tier badge, name, spawn bonus, cost, and CTA.
  */
 import React from 'react';
-import { View, Text, Pressable } from 'react-native';
+import { View, Text } from 'react-native';
+import { Touchable } from './Touchable';
+import { font, color, radius, shadow, space } from '../theme';
 import type { ItemTier } from '../types';
 import type { PlaceableItemDef } from '../utils/spawnCalculator';
 import { pressScale, CARD_SHADOW } from '../utils/styles';
@@ -46,24 +48,23 @@ export function ShopItemCard({
   const isFree = item.cost === 0;
 
   return (
-    <Pressable
+    <Touchable
       onPress={onPress}
       disabled={isOwned}
-      style={({ pressed }) => [
-        pressScale(pressed, 0.96),
-        CARD_SHADOW,
-        {
-          backgroundColor: '#FFFFFF',
-          borderRadius: 18,
-          padding: 14,
-          marginBottom: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 12,
-          borderWidth: 1,
-          borderColor: tier.ring,
-        },
-      ]}
+      scaleTo={0.96}
+      accessibilityRole="button"
+      style={{
+        backgroundColor: color.surface,
+        borderRadius: radius.md + 2,
+        padding: 14,
+        marginBottom: space.sm + 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: space.sm + 4,
+        borderWidth: 1,
+        borderColor: tier.ring,
+        ...shadow.card,
+      }}
     >
       {/* Emoji bubble */}
       <View
@@ -83,7 +84,7 @@ export function ShopItemCard({
       {/* Info */}
       <View style={{ flex: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          <Text style={{ fontSize: 14, fontWeight: '700', color: '#2C2A29' }}>
+          <Text style={{ fontSize: 14, fontFamily: font.bold, color: '#2C2A29' }}>
             {item.label}
           </Text>
           {/* Tier badge */}
@@ -97,14 +98,14 @@ export function ShopItemCard({
               borderColor: tier.ring,
             }}
           >
-            <Text style={{ fontSize: 9, fontWeight: '700', color: tier.text }}>
+            <Text style={{ fontSize: 9, fontFamily: font.bold, color: tier.text }}>
               {tier.label.toUpperCase()}
             </Text>
           </View>
         </View>
 
         {/* Spawn bonus */}
-        <Text style={{ fontSize: 12, color: '#FF8E53', fontWeight: '600', marginTop: 3 }}>
+        <Text style={{ fontSize: 12, color: '#FF8E53', fontFamily: font.medium, marginTop: 3 }}>
           +{item.spawn_bonus}% spawn chance
         </Text>
         <Text style={{ fontSize: 11, color: '#706B67', marginTop: 1 }}>
@@ -123,7 +124,7 @@ export function ShopItemCard({
               paddingVertical: 6,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>
+            <Text style={{ fontSize: 12, fontFamily: font.bold, color: '#16A34A' }}>
               {isFree ? 'Free' : '✓ Owned'}
             </Text>
           </View>
@@ -139,7 +140,7 @@ export function ShopItemCard({
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: '700',
+                fontFamily: font.bold,
                 color: canAfford ? '#FFFFFF' : '#706B67',
               }}
             >
@@ -148,6 +149,6 @@ export function ShopItemCard({
           </View>
         )}
       </View>
-    </Pressable>
+    </Touchable>
   );
 }

@@ -22,41 +22,47 @@ export interface PlacementSlot {
   accepts: ItemCategory[];
 }
 
+/**
+ * Slot positions are percentages of the room box, and were retuned when the
+ * apartment went full-bleed: the floor line moved from 30% to 42% and the
+ * bottom fifth of the screen is now covered by the drawer and the floating
+ * buttons, so anything past about y:76 is unreachable.
+ */
 export const APARTMENT_SLOTS: PlacementSlot[] = [
   {
     slot_id: 'shelf',
     label: 'On the shelf',
-    x: 13, y: 12,
+    x: 13, y: 24,
     accepts: ['toy', 'decor'],
   },
   {
     slot_id: 'windowsill',
     label: 'On the windowsill',
-    x: 72, y: 32,
+    x: 68, y: 40,
     accepts: ['toy', 'decor'],
   },
   {
     slot_id: 'sofa',
     label: 'On the sofa',
-    x: 15, y: 50,
+    x: 16, y: 52,
     accepts: ['shelter', 'toy'],
   },
   {
     slot_id: 'floor_left',
     label: 'Beside the sofa',
-    x: 36, y: 62,
+    x: 36, y: 64,
     accepts: ['food', 'shelter'],
   },
   {
     slot_id: 'rug',
     label: 'On the rug',
-    x: 52, y: 74,
+    x: 52, y: 70,
     accepts: ['toy', 'food'],
   },
   {
     slot_id: 'floor_right',
     label: 'Under the window',
-    x: 80, y: 64,
+    x: 82, y: 64,
     accepts: ['food', 'shelter', 'decor'],
   },
 ];

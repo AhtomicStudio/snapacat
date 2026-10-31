@@ -11,14 +11,11 @@ import {
   Animated,
   Easing,
   LayoutAnimation,
-  Platform,
-  Pressable,
-  SafeAreaView,
   ScrollView,
   Text,
-  UIManager,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import type { UserProgression, ItemTier } from '../types';
 import { THEMES, getThemeById } from '../config/themes';
 import { ENVIRONMENTS, getEnvironmentById } from '../config/environments';
@@ -37,12 +34,14 @@ import {
 import { ThemePreviewCard } from '../components/ThemePreviewCard';
 import { EnvironmentCard } from '../components/EnvironmentCard';
 import { ShopItemCard } from '../components/ShopItemCard';
-import { CARD_SHADOW, HIT_SLOP_MD, pressScale } from '../utils/styles';
+import { CARD_SHADOW, HIT_SLOP_MD } from '../utils/styles';
+import { Touchable } from '../components/Touchable';
+import { font, color, space, radius, TAP_MIN } from '../theme';
 
-// Enable LayoutAnimation on Android
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// LayoutAnimation needed an explicit Android opt-in under the old
+// architecture. Under Fabric it is on by default and the setter is a no-op
+// that logs a warning on every launch — so calling it bought a yellow box and
+// nothing else. configureNext below still animates.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,42 +93,45 @@ function TabBar({
       {tabs.map((tab) => {
         const isActive = tab.id === active;
         return (
-          <Pressable
+          <Touchable
             key={tab.id}
             onPress={() => {
               LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
               onSelect(tab.id);
             }}
-            style={({ pressed }) => [
-              pressScale(pressed, 0.97),
-              {
-                flex: 1,
-                paddingVertical: 9,
-                borderRadius: 10,
-                alignItems: 'center',
-                backgroundColor: isActive ? '#FFFFFF' : 'transparent',
-                ...(isActive
-                  ? {
-                      shadowColor: '#2C2A29',
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.08,
-                      shadowRadius: 4,
-                      elevation: 2,
-                    }
-                  : {}),
-              },
-            ]}
+            scaleTo={0.97}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+            style={{
+              flex: 1,
+              paddingVertical: 9,
+              paddingHorizontal: space.sm,
+              borderRadius: radius.sm + 2,
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 38,
+              backgroundColor: isActive ? color.surface : 'transparent',
+              ...(isActive
+                ? {
+                    shadowColor: color.charcoal,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.08,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }
+                : {}),
+            }}
           >
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: isActive ? '700' : '500',
+                fontFamily: isActive ? font.bold : font.medium,
                 color: isActive ? '#2C2A29' : '#706B67',
               }}
             >
               {tab.label}
             </Text>
-          </Pressable>
+          </Touchable>
         );
       })}
     </View>
@@ -159,31 +161,31 @@ function ItemFilterBar({
       {filters.map((f) => {
         const isActive = f.id === active;
         return (
-          <Pressable
+          <Touchable
             key={f.id}
             onPress={() => onSelect(f.id)}
-            style={({ pressed }) => [
-              pressScale(pressed, 0.95),
-              {
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: 99,
-                backgroundColor: isActive ? '#FF8E53' : '#FFFFFF',
-                borderWidth: 1.5,
-                borderColor: isActive ? '#FF8E53' : 'rgba(234,227,218,0.8)',
-              },
-            ]}
+            scaleTo={0.95}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isActive }}
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 7,
+              borderRadius: radius.full,
+              backgroundColor: isActive ? color.ginger : color.surface,
+              borderWidth: 1.5,
+              borderColor: isActive ? color.ginger : color.borderSoft,
+            }}
           >
             <Text
               style={{
                 fontSize: 12,
-                fontWeight: '700',
+                fontFamily: font.bold,
                 color: isActive ? '#FFFFFF' : '#706B67',
               }}
             >
               {f.label}
             </Text>
-          </Pressable>
+          </Touchable>
         );
       })}
     </ScrollView>
@@ -360,7 +362,7 @@ export function ShopScreen({
         }}
       >
         <View>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: '#2C2A29' }}>
+          <Text style={{ fontSize: 20, fontFamily: font.bold, color: '#2C2A29' }}>
             🛍 Shop
           </Text>
           <Text style={{ fontSize: 12, color: '#706B67', marginTop: 1 }}>
@@ -385,7 +387,7 @@ export function ShopScreen({
             ]}
           >
             <Text style={{ fontSize: 14 }}>🐾</Text>
-            <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFFFFF' }}>
+            <Text style={{ fontSize: 15, fontFamily: font.bold, color: '#FFFFFF' }}>
               {progression.paw_points}
             </Text>
           </View>
@@ -511,25 +513,26 @@ export function ShopScreen({
           borderTopColor: 'rgba(234,227,218,0.6)',
         }}
       >
-        <Pressable
+        <Touchable
           onPress={onClose}
           hitSlop={HIT_SLOP_MD}
-          style={({ pressed }) => [
-            pressScale(pressed, 0.97),
-            {
-              backgroundColor: '#FAF6F0',
-              borderRadius: 14,
-              paddingVertical: 14,
-              alignItems: 'center',
-              borderWidth: 1,
-              borderColor: 'rgba(234,227,218,0.8)',
-            },
-          ]}
+          scaleTo={0.97}
+          accessibilityRole="button"
+          style={{
+            backgroundColor: color.surfaceSunken,
+            borderRadius: radius.sm + 6,
+            paddingVertical: 14,
+            minHeight: TAP_MIN,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 1,
+            borderColor: color.borderSoft,
+          }}
         >
-          <Text style={{ fontSize: 15, fontWeight: '700', color: '#706B67' }}>
+          <Text style={{ fontSize: 15, fontFamily: font.bold, color: color.textSecondary }}>
             Done
           </Text>
-        </Pressable>
+        </Touchable>
       </View>
     </SafeAreaView>
   );

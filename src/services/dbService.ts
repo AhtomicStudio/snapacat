@@ -5,7 +5,7 @@ import {
   usersCollection,
   userDoc,
 } from '../config/firebase';
-import type { Cat, User, Hood, ScrapbookEntry, HexColor, UserProgression } from '../types';
+import type { Cat, User, Hood, HoodNote, ScrapbookEntry, HexColor, UserProgression } from '../types';
 import { getDefaultProgression } from '../utils/progressionEngine';
 import { extractColorsForSighting } from '../utils/colorExtractor';
 
@@ -261,6 +261,32 @@ export async function updateHoodLayout(
   await userDoc(uid).update({
     [`hoods.${hoodId}.placed_items`]: items,
     [`hoods.${hoodId}.item_placements`]: itemPlacements,
+  });
+  return true;
+}
+
+/**
+ * Replace a Hood's scrapbook.
+ *
+ * Whole-array writes rather than an arrayUnion, because notes can be
+ * edited and deleted as well as added, and a scrapbook is small enough
+ * that the simple thing is also the correct one.
+ */
+export async function updateHoodScrapbook(
+  uid: string,
+  hoodId: string,
+  notes: HoodNote[],
+): Promise<boolean> {
+  if (isMockMode) {
+    const user = mockUsers[uid];
+    const hood = user?.hoods[hoodId];
+    if (!hood) return false;
+    hood.scrapbook = notes.map((n) => ({ ...n }));
+    return true;
+  }
+
+  await userDoc(uid).update({
+    [`hoods.${hoodId}.scrapbook`]: notes,
   });
   return true;
 }
